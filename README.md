@@ -1,5 +1,11 @@
 # Natural Language Planning Goals
 
+## Install
+
+Run ```pip install -e .``` to install the module in development mode. 
+
+TODO: List required modules, and any other install reqs.
+
 ## Model Summary
 We're interested in creating goals, in the form of Multi-Modal Entity Maps (MEMs). These are, in practice, segmeneted point clouds. We'll structure them here as object entity maps, and environment entity maps. We'll first train a network to select the relevant entities from any given MEM, and we can then temporarily move all the non-selected entities to the background.
 

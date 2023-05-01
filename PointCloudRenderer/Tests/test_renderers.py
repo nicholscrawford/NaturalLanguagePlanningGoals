@@ -4,6 +4,7 @@ from PointCloudRenderer.point_to_rgb_transformer import TransformerPointsToRGBMo
 import random, cv2
 import numpy as np
 import torch
+import matplotlib as plt
 
 if __name__ == "__main__":
     data_dir = get_dataset_and_cache()
@@ -45,10 +46,11 @@ if __name__ == "__main__":
     pointcloud = torch.tensor(pointcloud)
     
     transformer = TransformerPointsToRGBModule(5, nhead=2, num_layers=3)
-    renderer = PointCloudRenderer(pointcloud, transformer, intrinsics)
+    renderer = PointCloudRenderer(pointcloud, transformer, intrinsics, extrinsics)
 
     images = renderer.render_images()
 
-    cv2.imshow(images[0])
+    plt.imshow(images[0])
+    plt.show()
 
     exit(0)

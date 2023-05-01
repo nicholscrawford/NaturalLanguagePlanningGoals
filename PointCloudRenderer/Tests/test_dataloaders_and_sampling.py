@@ -36,8 +36,6 @@ def publish_camera_frame(points, T_camera_world, camera_name='camera'):
     # Extract the translation and rotation from the extrinsic matrix
     translation = T_camera_world[:3, 3]
     rotation = T_camera_world[:3, :3]
-
-    camera_direction_global = -rotation @ np.array([0, 0, 1])
     
     # Convert the rotation matrix to a quaternion
     q = transformations.quaternion_from_matrix(np.vstack((T_camera_world, [0, 0, 0, 1])))
@@ -69,11 +67,10 @@ def publish_camera_frame(points, T_camera_world, camera_name='camera'):
     marker.pose.position.z = 0
 
     # Set the orientation of the marker to point in the direction of the camera's optical axis
-    marker_orientation = transformations.quaternion_from_euler(0, np.arctan2(camera_direction_global[1], camera_direction_global[0]), -np.arctan2(camera_direction_global[2], np.linalg.norm(camera_direction_global)))
-    marker.pose.orientation.x = marker_orientation[0]
-    marker.pose.orientation.y = marker_orientation[1]
-    marker.pose.orientation.z = marker_orientation[2]
-    marker.pose.orientation.w = marker_orientation[3]
+    marker.pose.orientation.x = -0.5
+    marker.pose.orientation.y = -0.5
+    marker.pose.orientation.z = -0.5
+    marker.pose.orientation.w = 0.5
 
 
     marker.scale.x = 0.2
