@@ -1,12 +1,15 @@
 import numpy as np
+import random
 
-def uniform(depth, k):
-    h, w = depth.shape[:2]
-    depth_flat = depth.flatten()
-    valid_mask = np.where(depth_flat > 0)[0]
-    valid_depth = depth_flat[valid_mask]
-    valid_indices = np.random.choice(valid_mask, size=k, replace=True)
-    valid_points = np.zeros((k, 2))
-    valid_points[:, 1] = np.floor_divide(valid_indices, w)
-    valid_points[:, 0] = np.mod(valid_indices, w)
-    return valid_points
+
+def uniform_d10(depth_img, image_pixel, k_points): # Sample k_points pixels in the depth image around the image_pixel
+        y, x = image_pixel
+        height, width = depth_img.shape
+        depth_pixels = []
+        for i in range(k_points):
+            dx = random.randint(-10, 10)
+            dy = random.randint(-10, 10)
+            sx = max(0, min(width - 1, x + dx))
+            sy = max(0, min(height - 1, y + dy))
+            depth_pixels.append((sy, sx))
+        return depth_pixels

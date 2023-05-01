@@ -4,19 +4,16 @@ from scipy.spatial.transform import Rotation
 
 from PointCloudRenderer.point_to_rgb_mlp import MLPPointToRGBModule
 from PointCloudRenderer.point_to_rgb_transformer import \
-    TransformerPointToRGBModule
+    TransformerPointsToRGBModule
 
+import torch
 
 class PointCloudRenderer():
     def __init__(self, pointcloud, model="mlp", camera_K = [], k_points=5) -> None:
         self.pointcloud = pointcloud
         self.camera_K = camera_K
         self.k_points = k_points
-
-        if model == "mlp":
-            self.model = MLPPointToRGBModule()
-        elif model == "transformer":
-            self.model = TransformerPointToRGBModule()
+        self.model = model
 
 
     def render_images(self, num_images=1, img_resolution_x = 1280, img_resolution_y = 720):
@@ -49,15 +46,21 @@ class PointCloudRenderer():
         ray_origin = -np.linalg.inv(R) @ t
         
         # Compute the distances to all points in the point cloud along the ray
-        distances_along_ray = np.dot(self.point_cloud - ray_origin, ray_direction)
+        distances_along_ray = np.dot(self.pointcloud[:, :3] - ray_origin, ray_direction)
         
         # Sort the distances and get the indices of the k nearest points
         indices = np.argsort(distances_along_ray)[:self.k_points]
         
-        # Return the k nearest points
-        return self.pointcloud[indices]
+        # Return the k nearest points with the same type as the input pointcloud array
+        if isinstance(self.pointcloud, np.ndarray):
+            return self.pointcloud[indices]
+        elif isinstance(self.pointcloud, torch.Tensor):
+            self.pointcloud.index_select()
+            return self.pointcloud.index_select(0, torch.tensor(indices))
+        else:
+            raise ValueError("Input point cloud array type not supported.")
     
-    def get_center(self, point_cloud, outlier_threshold=None):
+    def get_center(self, outlier_threshold=None):
         """
         Computes the "center" of a point cloud by taking the average of all
         points within a certain distance threshold from the mean.
@@ -65,19 +68,25 @@ class PointCloudRenderer():
         Returns:
         numpy array: a 1D array of shape (3,) representing the computed center point.
         """
+
+        if isinstance(self.pointcloud, torch.Tensor):
+            pointcloud = self.pointcloud.detach().cpu().numpy()
+        else:
+            pointcloud = self.pointcloud
+        
         if outlier_threshold == None:
             outlier_threshold = self.compute_outlier_threshold()
         # Compute the mean of all points in the cloud
-        cloud_mean = np.mean(point_cloud, axis=0)
+        cloud_mean = np.mean(pointcloud[:, :3], axis=0)
         
         # Compute the distances of all points to the mean
-        distances = np.linalg.norm(point_cloud - cloud_mean, axis=1)
+        distances = np.linalg.norm(pointcloud[:, :3] - cloud_mean, axis=1)
         
         # Identify points within the outlier threshold
-        inliers = point_cloud[distances <= outlier_threshold]
+        inliers = pointcloud[distances <= outlier_threshold]
         
         # Compute the mean of the inliers
-        center = np.mean(inliers, axis=0)
+        center = np.mean(inliers[:, :3], axis=0)
         
         return center
     
@@ -95,8 +104,13 @@ class PointCloudRenderer():
         Returns:
         float: the computed outlier threshold.
         """
+        if isinstance(self.pointcloud, torch.Tensor):
+            pointcloud = self.pointcloud.detach().cpu().numpy()
+        else:
+            pointcloud = self.pointcloud
+
         # Compute the distances of all points to the mean
-        distances = np.linalg.norm(self.point_cloud - np.mean(self.point_cloud, axis=0), axis=1)
+        distances = np.linalg.norm(pointcloud - np.mean(pointcloud, axis=0), axis=1)
         
         # Compute the first and third quartiles of the distances
         q1, q3 = np.percentile(distances, [25, 75])
