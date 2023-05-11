@@ -32,7 +32,7 @@ class TransformerPointsToRGBModule(pl.LightningModule):
         colors = normalize_rgb_zero_centered(colors)
         coords = normalize_coords_local_mean(coords)
 
-        # Reshape input for transformer
+        # Recombine normalized params and reshape input for transformer
         x = torch.cat((coords, colors), dim = 2).transpose(0, 1)  # (k, batch_size, d_model)
         
         # Apply transformer layers

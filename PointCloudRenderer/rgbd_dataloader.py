@@ -126,7 +126,16 @@ class SUNRGBDDataset(Dataset):
         y = random.randint(0, height - 1)
         return y, x
     
+    def convert_torch_to_numpy(self, array):
+        if isinstance(array, torch.Tensor):
+            return np.array(array.cpu())
+        else:
+            return array
+    
     def get_pointcloud(self, depth_pixels, depth_img, img, extrinsics, intrinsics):
+        extrinsics = self.convert_torch_to_numpy(extrinsics)
+        intrinsics = self.convert_torch_to_numpy(intrinsics)
+
         # Translate the depth pixels into a colored pointcloud in 3D space
         points = []
         for sy, sx in depth_pixels:

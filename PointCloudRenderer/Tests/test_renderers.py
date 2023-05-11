@@ -4,9 +4,10 @@ from PointCloudRenderer.point_to_rgb_transformer import TransformerPointsToRGBMo
 import random, cv2
 import numpy as np
 import torch
-import matplotlib as plt
+import matplotlib.pyplot as plt
 
-if __name__ == "__main__":
+def main():
+    torch.set_default_dtype(torch.float)
     data_dir = get_dataset_and_cache()
     dataset = get_dataloader(data_dir).dataset
 
@@ -28,13 +29,15 @@ if __name__ == "__main__":
         extrinsics = extrinsics.reshape((3, 4))
     elif extrinsics.shape != (3, 4):
         raise ValueError("Extrinsics matrix should be a 3x4 matrix or a 1D array with 12 values.")
-            
+    extrinsics = torch.from_numpy(extrinsics).to("cuda")
+
     intrinsics = np.loadtxt(intrinsics_path)
     if intrinsics.ndim == 1:
         intrinsics = intrinsics.reshape((3, 3))
     elif intrinsics.shape != (3, 3):
         raise ValueError("Intrinsics matrix should be a 3x3 matrix or a 1D array with 9 values.")
-            
+    intrinsics = torch.from_numpy(intrinsics).to("cuda")
+
     depth_img = cv2.imread(depth_path, cv2.IMREAD_ANYDEPTH)
 
     # Convert the raw depth values to meters using the https://github.com/ankurhanda/sunrgbd-meta-data
@@ -45,12 +48,15 @@ if __name__ == "__main__":
     pointcloud = dataset.get_pointcloud(depth_pixels, depth_img, img, extrinsics, intrinsics)
     pointcloud = torch.tensor(pointcloud)
     
-    transformer = TransformerPointsToRGBModule(5, nhead=2, num_layers=3)
+    transformer = TransformerPointsToRGBModule(5, nhead=2, num_layers=3).to('cuda')
     renderer = PointCloudRenderer(pointcloud, transformer, intrinsics, extrinsics)
 
     images = renderer.render_images()
 
-    plt.imshow(images[0])
+    plt.imshow(images[0].cpu().detach().numpy().astype(int))
     plt.show()
 
-    exit(0)
+
+if __name__ == "__main__":
+    main()
+
