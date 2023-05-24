@@ -33,10 +33,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_layers', type=int, default=3, help='Number of layers in the transformer')
     parser.add_argument('--dropout', type=float, default=0.1, help='Dropout rate in the transformer')
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size for training and validation data loaders')
-    parser.add_argument('--num_train_samples', type=int, default=1000, help='Number of samples in the training dataset')
-    parser.add_argument('--num_val_samples', type=int, default=100, help='Number of samples in the validation dataset')
-    parser.add_argument('--max_epochs', type=int, default=10, help='Maximum number of epochs to train')
-    parser.add_argument('--gpus', type=int, default=1, help='Number of GPUs to use')
+    parser.add_argument('--max_epochs', type=int, default=1000, help='Maximum number of epochs to train')
 
     args = parser.parse_args()
 

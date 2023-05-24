@@ -11,6 +11,7 @@ from sensor_msgs.msg import PointCloud2, PointField
 from std_msgs.msg import Header
 from tf import transformations
 import cv2
+import torch
 
 from PointCloudRenderer.rgbd_dataloader import (SUNRGBDDataset, get_dataloader,
                                                 get_dataset_and_cache)
@@ -18,7 +19,7 @@ from PointCloudRenderer.sampling_methods import uniform_d10
 
 from PointCloudRenderer.pointcloud_renderer import PointCloudRenderer
 
-def publish_camera_frame(points, T_camera_world, pointcloud_center, camera_name='camera'):
+def publish_camera_frame(points,selected_points,raycast_points, T_camera_world, pointcloud_center, ray, camera_name='camera'):
     """
     Publish a camera frame in RViz using a given camera extrinsic matrix.
 
@@ -102,6 +103,55 @@ def publish_camera_frame(points, T_camera_world, pointcloud_center, camera_name=
     marker_pub = rospy.Publisher('visualization_marker', visualization_msgs.msg.Marker, queue_size=1)
 
 
+    # Publish a visualization marker for the ray
+    ray_direction, ray_origin = ray
+    ray_direction = ray_direction.cpu().numpy()
+
+    ray_origin = ray_origin.cpu().numpy()
+
+    ray_marker = visualization_msgs.msg.Marker()
+    ray_marker.header.frame_id = "map"
+    ray_marker.header.stamp = rospy.Time.now()
+    #ray_marker.ns = 'camera_frame'
+    ray_marker.id = 0
+    ray_marker.type = visualization_msgs.msg.Marker.ARROW
+    marker.action = visualization_msgs.msg.Marker.ADD
+    ray_marker.pose.position.x = ray_origin[0]
+    ray_marker.pose.position.y = ray_origin[1]
+    ray_marker.pose.position.z = ray_origin[2]
+
+    # Set the orientation of the marker to point in the direction of the ray
+    direction_norm = np.linalg.norm(ray_direction)
+    if direction_norm != 0:
+        direction_unit = ray_direction / direction_norm
+    else:
+        direction_unit = np.array([1, 0, 0])  # Default unit direction if the provided direction is zero vector
+
+
+    marker_orientation = transformations.quaternion_from_euler(0, 0, 0)
+    marker_orientation[1] = direction_unit[1] * np.sin(0.5 * np.arccos(direction_unit[0]))
+    marker_orientation[2] = direction_unit[2] * np.sin(0.5 * np.arccos(direction_unit[0]))
+    marker_orientation[3] = direction_unit[0] * np.sin(0.5 * np.arccos(direction_unit[0]))
+    marker_orientation[0] = np.cos(0.5 * np.arccos(direction_unit[0]))
+
+    ray_marker.pose.orientation.x = marker_orientation[0]
+    ray_marker.pose.orientation.y = marker_orientation[1]
+    ray_marker.pose.orientation.z = marker_orientation[2]
+    ray_marker.pose.orientation.w = marker_orientation[3]
+
+
+    ray_marker.scale.x = 2
+    ray_marker.scale.y = 0.01
+    ray_marker.scale.z = 0.01
+    ray_marker.color.a = 1.0
+    ray_marker.color.r = 0.0
+    ray_marker.color.g = 0.0
+    ray_marker.color.b = 1.0
+
+    ray_marker_pub = rospy.Publisher('ray_marker', visualization_msgs.msg.Marker, queue_size=1)
+
+
+
     # Create a ROS publisher for the point cloud topic
     pub = rospy.Publisher('/image_pointcloud', PointCloud2, queue_size=10)
 
@@ -129,16 +179,59 @@ def publish_camera_frame(points, T_camera_world, pointcloud_center, camera_name=
     
     cloud = pc2.create_cloud(header, fields, msg_points)
 
+    # Create a ROS publisher for the point cloud topic
+    sel_pub = rospy.Publisher('/selected_pointcloud', PointCloud2, queue_size=10)
+
+    # Create a header for the point cloud
+    header = Header()
+    header.stamp = rospy.Time.now()
+    header.frame_id = 'map'
+
+    # Define the point cloud fields
+    fields = [
+        PointField('x', 0, PointField.FLOAT32, 1),
+        PointField('y', 4, PointField.FLOAT32, 1),
+        PointField('z', 8, PointField.FLOAT32, 1),
+        PointField('rgba', 12, PointField.UINT32, 1)
+    ]
+
+
+    msg_points = []
+    for i in range(selected_points.shape[0]):
+        point = (selected_points[i][0].item(), selected_points[i][1].item(), selected_points[i][2].item())
+        color = (int(selected_points[i][3].item()), int(selected_points[i][4].item()), int(selected_points[i][5].item()), 255)
+        r, g, b, a = color
+        rgb = struct.unpack('I', struct.pack('BBBB', b, g, r, a))[0]
+        msg_points.append([point[0], point[1], point[2], rgb])
+    
+    selected_cloud = pc2.create_cloud(header, fields, msg_points)
+
+    # Create a ROS publisher for the point cloud topic
+    cast_pub = rospy.Publisher('/raycast_pointcloud', PointCloud2, queue_size=10)
+
+    msg_points = []
+    for i in range(raycast_points.shape[0]):
+        point = (raycast_points[i][0].item(), raycast_points[i][1].item(), raycast_points[i][2].item())
+        color = (int(raycast_points[i][3].item()), int(raycast_points[i][4].item()), int(raycast_points[i][5].item()), 255)
+        r, g, b, a = color
+        rgb = struct.unpack('I', struct.pack('BBBB', b, g, r, a))[0]
+        msg_points.append([point[0], point[1], point[2], rgb])
+    
+    cast_cloud = pc2.create_cloud(header, fields, msg_points)
 
     while not rospy.is_shutdown():
         marker.header.stamp = rospy.Time.now()
         cloud.header.stamp = rospy.Time.now()
         marker_pub.publish(marker)
+        ray_marker_pub.publish(ray_marker)
         pub.publish(cloud)
+        sel_pub.publish(selected_cloud)
+        cast_pub.publish(cast_cloud)
         rospy.sleep(0.1)
 
 
 if __name__ == "__main__":
+    torch.set_default_dtype(torch.float)
     data_dir = get_dataset_and_cache()
     print("Loaded default dataset SUNRGBD")
     dataset = SUNRGBDDataset(data_dir, 5, uniform_d10)
@@ -175,22 +268,30 @@ if __name__ == "__main__":
     # Get the pixel image location, our x val
     image_pixel = dataset.select_img_pixel(img)
 
-    # For the test, we'll just grab all the pixels in the image. Alternatively, uncomment the other depth pixels to display those. 
-    #depth_pixels = dataset.sampling_method(depth_img, image_pixel, dataset.k_points)
+    # For the test, we'll just grab all the pixels in the image. And display some selected ones based on depth sampling.
+    selected_depth_pixels = dataset.sampling_method(depth_img, image_pixel, dataset.k_points)
     depth_pixels = [(y, x) for y in range(depth_img.shape[0]-1) for x in range(depth_img.shape[1]-1)]
 
     # Then translate those pixels into a pointcloud in 3d space using the camera extrinsic and intrinsic matrix
     pointcloud = dataset.get_pointcloud(depth_pixels, depth_img, img, extrinsics, intrinsics)
+    selected_pointcloud = dataset.get_pointcloud(selected_depth_pixels, depth_img, img, extrinsics, intrinsics)
+    
+    renderer = PointCloudRenderer(pointcloud, None, intrinsics, extrinsics)
 
-    renderer = PointCloudRenderer(pointcloud, None, None, extrinsics)
+    # And let's get some points using the raycasting approach.
+    ray_direction, ray_origin = renderer.get_ray(torch.tensor(extrinsics[:, :3]).to('cuda').float(), torch.tensor(extrinsics[:, 3:]).to('cuda').float(), image_pixel[0], image_pixel[1])
+    print(f"ray dir: {ray_direction}, ray origin: {ray_origin}")
+    ray = (ray_direction, ray_origin)
+    raycast_pointcloud = renderer.get_k_nearest_points(torch.tensor(extrinsics[:, :3]).to('cuda').float(), torch.tensor(extrinsics[:, 3:]).to('cuda').float(), image_pixel[0], image_pixel[1])
 
     R, t = renderer.get_random_camera_pose()
-    new_extrinsics = np.concatenate((R, t[:, np.newaxis]), axis=1)
+    new_extrinsics = torch.cat((R, t[:, np.newaxis]), dim=1)
 
     print(new_extrinsics)
 
     pointcloud_center = renderer.get_center()
 
-    publish_camera_frame(pointcloud, new_extrinsics, pointcloud_center)
+    new_extrinsics = new_extrinsics.cpu().numpy()
+    publish_camera_frame(pointcloud, selected_pointcloud, raycast_pointcloud, new_extrinsics, pointcloud_center, ray)
 
     exit(0)

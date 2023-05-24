@@ -1,3 +1,4 @@
+from typing import Any
 from PointCloudRenderer.pointcloud_renderer import PointCloudRenderer
 from PointCloudRenderer.rgbd_dataloader import get_dataloader, get_dataset_and_cache
 from PointCloudRenderer.point_to_rgb_transformer import TransformerPointsToRGBModule
@@ -5,6 +6,20 @@ import random, cv2
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
+
+class Averaging_Renderer():
+    def __init__(self) -> None:
+        pass
+
+    def __call__(self, *args: Any, **kwds: Any) -> Any:
+        # Extract the input tensor
+        points = args[0]
+
+        # Calculate the average RGB values along the second axis (num_points)
+        average_rgb = torch.mean(points[:, :, 3:], dim=1)
+
+        # Return the result with shape (batch_size, 3)
+        return average_rgb
 
 def main():
     torch.set_default_dtype(torch.float)
@@ -48,10 +63,12 @@ def main():
     pointcloud = dataset.get_pointcloud(depth_pixels, depth_img, img, extrinsics, intrinsics)
     pointcloud = torch.tensor(pointcloud)
     
-    transformer = TransformerPointsToRGBModule(5, nhead=2, num_layers=3).to('cuda')
-    renderer = PointCloudRenderer(pointcloud, transformer, intrinsics, extrinsics)
+    averager = Averaging_Renderer()
+    renderer = PointCloudRenderer(pointcloud, averager, intrinsics, extrinsics)
 
-    images = renderer.render_images(img_resolution_x=50, img_resolution_y=50)
+    images = renderer.render_images(img_resolution_x=300, img_resolution_y=300)
+    plt.imshow(img)
+    plt.show()
 
     plt.imshow(images[0].cpu().detach().numpy().astype(int))
     plt.show()

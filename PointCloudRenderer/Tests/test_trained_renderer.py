@@ -48,10 +48,12 @@ def main():
     pointcloud = dataset.get_pointcloud(depth_pixels, depth_img, img, extrinsics, intrinsics)
     pointcloud = torch.tensor(pointcloud)
     
-    transformer = TransformerPointsToRGBModule(5, nhead=2, num_layers=3).to('cuda')
+    transformer = TransformerPointsToRGBModule.load_from_checkpoint("/home/nicholscrawfordtaylor/code/NaturalLanguagePlanningGoals/lightning_logs/version_1/checkpoints/epoch=324-step=56550.ckpt", k=5, nhead=2, num_layers=3).to('cuda')
     renderer = PointCloudRenderer(pointcloud, transformer, intrinsics, extrinsics)
 
-    images = renderer.render_images(img_resolution_x=50, img_resolution_y=50)
+    images = renderer.render_images(img_resolution_x=300, img_resolution_y=300)
+    plt.imshow(img)
+    plt.show()
 
     plt.imshow(images[0].cpu().detach().numpy().astype(int))
     plt.show()

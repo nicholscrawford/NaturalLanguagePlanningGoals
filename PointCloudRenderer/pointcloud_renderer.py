@@ -45,26 +45,25 @@ class PointCloudRenderer():
             images.append(image)
         return images
     
-    def get_k_nearest_points(self, camera_pose_R, camera_pose_t, pixel_location_x, pixel_location_y):
-        # Extract camera intrinsic and extrinsic parameters
-        K = self.camera_K
-        R = camera_pose_R
-        t = camera_pose_t
+    def get_ray(self, camera_pose_R, camera_pose_t, pixel_location_x, pixel_location_y):
+            # Extract camera intrinsic and extrinsic parameters
+            K = self.camera_K
+            R = camera_pose_R
+            t = camera_pose_t.squeeze() #Handle t extracted from homogenous or combined matrix by squeezin
 
-        # Ideally all inputs should be tensors on gpu.
-        # if isinstance(self.pointcloud, torch.Tensor):
-        #     pointcloud = self.pointcloud.detach().cpu().numpy()
-        # else:
-        #     pointcloud = self.pointcloud
-        
-        # Compute the ray direction in world coordinates
-        pixel_homogeneous = torch.tensor([pixel_location_y, pixel_location_x, 1.0]).to('cuda')
-        pixel_homogeneous = pixel_homogeneous.reshape((3,1))
-        ray_direction = torch.inverse(K @ R) @ pixel_homogeneous
-        ray_direction = ray_direction / torch.norm(ray_direction)
-        
-        # Compute the ray origin in world coordinates
-        ray_origin = -torch.inverse(R) @ t
+            # Compute the ray direction in world coordinates
+            pixel_homogeneous = torch.tensor([pixel_location_y, pixel_location_x, 1.0]).to('cuda')
+            pixel_homogeneous = pixel_homogeneous.reshape((3,1))
+            ray_direction = torch.inverse(K @ R) @ pixel_homogeneous
+            ray_direction = ray_direction / torch.norm(ray_direction)
+            
+            # Compute the ray origin in world coordinates
+            ray_origin = -torch.inverse(R) @ t
+
+            return ray_direction, ray_origin
+
+    def get_k_nearest_points(self, camera_pose_R, camera_pose_t, pixel_location_x, pixel_location_y):
+        ray_direction, ray_origin = self.get_ray(camera_pose_R, camera_pose_t, pixel_location_x, pixel_location_y)
         
         # Compute the distances to all points in the point cloud along the ray
         distances_along_ray = torch.tensordot(self.pointcloud[:, :3] - ray_origin, ray_direction.T)
@@ -76,14 +75,6 @@ class PointCloudRenderer():
         indices = torch.argsort(distances_from_ray.squeeze())[:self.k_points]
         
         return self.pointcloud.index_select(0, indices)
-    
-        # Return the k nearest points with the same type as the input pointcloud array
-        # if isinstance(self.pointcloud, np.ndarray):
-        #     return self.pointcloud[indices]
-        # elif isinstance(self.pointcloud, torch.Tensor):
-        #     return self.pointcloud.index_select(0, torch.tensor(indices))
-        # else:
-        #     raise ValueError("Input point cloud array type not supported.")
     
     def get_center(self, outlier_threshold=None):
         """
@@ -175,7 +166,7 @@ class PointCloudRenderer():
         R, t = self.initial_camera_pose[:, :3], self.initial_camera_pose[:, 3]
 
         # Compute a random translation away from the initial pose
-        delta_t = torch.normal(mean=0.0, std=1.0, size=(3,)).to('cuda')
+        delta_t = torch.normal(mean=0.0, std=0.05, size=(3,)).to('cuda')
         t_new = t + delta_t
 
         # Compute the direction vector pointing towards the center

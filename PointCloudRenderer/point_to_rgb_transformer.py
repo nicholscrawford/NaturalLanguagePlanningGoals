@@ -7,6 +7,7 @@ from PointCloudRenderer.normalizers import normalize_coords, normalize_coords_lo
 class TransformerPointsToRGBModule(pl.LightningModule):
     def __init__(self, k: int, nhead: int, num_layers: int, dropout: float = 0.1):
         super().__init__()
+        self.save_hyperparameters()
         
         self.k = k
         self.d_model = 6
