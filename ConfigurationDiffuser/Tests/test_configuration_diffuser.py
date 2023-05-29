@@ -1,4 +1,4 @@
-from ConfigurationDiffuser.configuration_diffuser import TransformerDiffusionModule
+from ConfigurationDiffuser.configuration_diffuser import TransformerDiffuser
 import torch
 
 # Instantiate the model
@@ -8,17 +8,33 @@ num_layers = 4
 num_heads = 8
 diffusion_steps = 10
 
-model = TransformerDiffusionModule(input_dim, hidden_dim, num_layers, num_heads, diffusion_steps)
+model = TransformerDiffuser( 
+                            num_attention_heads= 8,
+                            encoder_hidden_dim= 512,
+                            encoder_dropout= 0.0,
+                            encoder_activation= "relu",
+                            encoder_num_layers= 8,
+                            structure_dropout= 0,
+                            object_dropout= 0,
+                            ignore_rgb= True,
+                            )
 
+batch_size = 20
+num_objs = 5
+num_points = 512
 # Generate random input
-batch_size = 2
-sequence_length = 10
+t = torch.randint(0, 200, (batch_size,))
+pointcloud_xyzs = torch.randn((batch_size, num_objs, num_points, 3))
+object_locations = torch.randn((batch_size, num_objs, 9))
+struct_xyztheta_inputs = torch.randn((batch_size, 1, 9))
+position_index = torch.tensor([[0, 1, 2, 3, 4, 5] for _ in range(batch_size)])
+struct_position_index = torch.tensor([[6] for _ in range(batch_size)])
+start_token = torch.zeros((batch_size, 1)).int()
 
-input_data = torch.randn(batch_size, sequence_length, input_dim)  # Reshape input tensor
-
-print(f"Input data shape: {input_data.shape}")
 # Pass input through the model
-output = model(input_data)
+struct_xyztheta_outputs, obj_xyztheta_outputs = model(t, pointcloud_xyzs, object_locations, struct_xyztheta_inputs,
+                position_index, struct_position_index, start_token)
 
 # Print the output
-print(f"Output data shape: {output.shape}")
+print(f"struct_xyztheta_outputs shape: {struct_xyztheta_outputs.shape}")
+print(f"obj_xyztheta_outputs shape: {obj_xyztheta_outputs.shape}")
