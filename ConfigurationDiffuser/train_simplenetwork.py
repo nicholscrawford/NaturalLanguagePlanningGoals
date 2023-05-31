@@ -307,7 +307,7 @@ def train_model(cfg, model, data_iter, noise_schedule, optimizer, warmup, num_ep
 
         print('[Epoch:{}]:  Training Loss:{:.4}'.format(epoch, epoch_loss))
 
-        validate_model(cfg, model, data_iter, noise_schedule, epoch, device)
+        # validate_model(cfg, model, data_iter, noise_schedule, epoch, device)
 
         # evaluate(gts, predictions, ["obj_x_outputs", "obj_y_outputs", "obj_z_outputs", "obj_theta_outputs",
         #                             "struct_x_inputs", "struct_y_inputs", "struct_z_inputs", "struct_theta_inputs"])
@@ -335,31 +335,27 @@ def validate_model(cfg, model, data_iter, noise_schedule, epoch, device):
         with tqdm.tqdm(total=len(data_iter["valid"])) as pbar:
             for step, batch in enumerate(data_iter["valid"]):
 
-                # input
-                xyzs = batch["xyzs"].to(device, non_blocking=True)
+                (datapoint_pointclouds, transforms), images = batch
+                # pointcloud is of shape (B, Num_Objects, Num_Points, 6 (xyzrgb))
+                xyzs = datapoint_pointclouds[:,:,:, :3].to(device, non_blocking=True)
                 B = xyzs.shape[0]
                 # obj_pad_mask: we don't need it now since we are testing
-                obj_xyztheta_inputs = batch["obj_xyztheta_inputs"].to(device, non_blocking=True)
-                struct_xyztheta_inputs = batch["struct_xyztheta_inputs"].to(device, non_blocking=True)
-                position_index = batch["position_index"].to(device, non_blocking=True)
-                struct_position_index = batch["struct_position_index"].to(device, non_blocking=True)
+                obj_xyztheta_inputs = transforms.to(device, non_blocking=True)
 
-                start_token = torch.zeros((B, 1), dtype=torch.long).to(device, non_blocking=True)
                 t = torch.randint(0, noise_schedule.timesteps, (B,), dtype=torch.long).to(device, non_blocking=True)
 
-                # --------------
-                x_start = get_diffusion_variables(struct_xyztheta_inputs, obj_xyztheta_inputs)
+                position_index = torch.tensor([[0, 1, 2, 3, 4, 5] for _ in range(B)]).to(device, non_blocking=True)
+
+                #--------------
+                x_start = get_diffusion_variables(obj_xyztheta_inputs)
                 noise = torch.randn_like(x_start, device=device)
                 x_noisy = q_sample(x_start=x_start, t=t, noise_schedule=noise_schedule, noise=noise)
 
-                struct_xyztheta_inputs = x_noisy[:, 0, :].unsqueeze(1)  # B, 1, 3 + 6
-                obj_xyztheta_inputs = x_noisy[:, 1:, :]  # B, N, 3 + 6
-                struct_xyztheta_outputs, obj_xyztheta_outputs = model.forward(t, xyzs, obj_xyztheta_inputs,
-                                                                              struct_xyztheta_inputs,
-                                                                              position_index, struct_position_index,
-                                                                              start_token)
+                obj_xyztheta_inputs = x_noisy[:, :, :]  # B, N, 3 + 6
+                obj_xyztheta_outputs = model(t, xyzs, obj_xyztheta_inputs,
+                position_index)
 
-                predicted_noise = torch.cat([struct_xyztheta_outputs, obj_xyztheta_outputs], dim=1)
+                predicted_noise =  obj_xyztheta_outputs
                 if loss_type == 'l1':
                     loss = F.l1_loss(noise, predicted_noise)
                 elif loss_type == 'l2':
@@ -398,8 +394,6 @@ def load_model(model_dir):
     cfg = OmegaConf.load(os.path.join(model_dir, "config.yaml"))
 
     data_cfg = cfg.dataset
-    tokenizer = Tokenizer(data_cfg.vocab_dir)
-    vocab_size = tokenizer.get_vocab_size()
 
     # initialize model
     model_cfg = cfg.model
@@ -432,7 +426,7 @@ def load_model(model_dir):
     noise_schedule = NoiseSchedule(cfg.diffusion.time_steps)
 
     epoch = checkpoint['epoch']
-    return cfg, tokenizer, model, noise_schedule, optimizer, scheduler, epoch
+    return cfg, model, noise_schedule, optimizer, scheduler, epoch
 
 
 def run_model(cfg):
@@ -517,7 +511,7 @@ def run_model(cfg):
         print("Saving model to {}".format(model_dir))
         if not os.path.exists(model_dir):
             os.makedirs(model_dir)
-        save_model(model_dir, cfg, cfg.max_epochs, model, optimizer, scheduler)
+        save_model(model_dir, cfg, cfg.training.max_epochs, model, optimizer, scheduler)
 
 
 ########################################################################################################################
@@ -554,18 +548,18 @@ def sampling(cfg, model, data_iter, noise_schedule, device):
             for step, batch in enumerate(data_iter["valid"]):
 
                 # input
-                xyzs = batch["xyzs"].to(device, non_blocking=True)
+                (datapoint_pointclouds, transforms), images = batch
+                # pointcloud is of shape (B, Num_Objects, Num_Points, 6 (xyzrgb))
+                xyzs = datapoint_pointclouds[:,:,:, :3].to(device, non_blocking=True)
+               
                 B = xyzs.shape[0]
                 # obj_pad_mask: we don't need it now since we are testing
-                obj_xyztheta_inputs = batch["obj_xyztheta_inputs"].to(device, non_blocking=True)
-                struct_xyztheta_inputs = batch["struct_xyztheta_inputs"].to(device, non_blocking=True)
-                position_index = batch["position_index"].to(device, non_blocking=True)
-                struct_position_index = batch["struct_position_index"].to(device, non_blocking=True)
+                obj_xyztheta_inputs = transforms.to(device, non_blocking=True)
+                position_index = torch.tensor([[0, 1, 2, 3, 4, 5] for _ in range(B)]).to(device, non_blocking=True)
 
-                start_token = torch.zeros((B, 1), dtype=torch.long).to(device, non_blocking=True)
 
                 # --------------
-                x_gt = get_diffusion_variables(struct_xyztheta_inputs, obj_xyztheta_inputs)
+                x_gt = get_diffusion_variables( obj_xyztheta_inputs)
 
                 # start from random noise
                 x = torch.randn_like(x_gt, device=device)
@@ -578,13 +572,11 @@ def sampling(cfg, model, data_iter, noise_schedule, device):
                     sqrt_one_minus_alphas_cumprod_t = extract(noise_schedule.sqrt_one_minus_alphas_cumprod, t, x.shape)
                     sqrt_recip_alphas_t = extract(noise_schedule.sqrt_recip_alphas, t, x.shape)
 
-                    struct_xyztheta_inputs = x[:, 0, :].unsqueeze(1)  # B, 1, 3 + 6
-                    obj_xyztheta_inputs = x[:, 1:, :]  # B, N, 3 + 6
-                    struct_xyztheta_outputs, obj_xyztheta_outputs = model.forward(t, xyzs, obj_xyztheta_inputs,
-                                                                                  struct_xyztheta_inputs,
-                                                                                  position_index, struct_position_index,
-                                                                                  start_token)
-                    predicted_noise = torch.cat([struct_xyztheta_outputs, obj_xyztheta_outputs], dim=1)
+                    obj_xyztheta_inputs = x[:, :, :]  # B, N, 3 + 6
+                    obj_xyztheta_outputs = model.forward(t, xyzs, obj_xyztheta_inputs,
+                                                                                  position_index,
+                                                                                  )
+                    predicted_noise = obj_xyztheta_outputs
 
                     model_mean = sqrt_recip_alphas_t * (x - betas_t * predicted_noise / sqrt_one_minus_alphas_cumprod_t)
 
@@ -598,6 +590,7 @@ def sampling(cfg, model, data_iter, noise_schedule, device):
 
                     xs.append(x)
                 # --------------
+    return xs
 
 
 if __name__ == "__main__":

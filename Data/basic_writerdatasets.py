@@ -24,7 +24,7 @@ class _PointCloudTransmissionFormat:
         return pointcloud
 
 class AbstractDataset(Dataset):
-    def __init__(self, device, ds_root = "/home/nichols/Data/may30/", clear_cache=False):
+    def __init__(self, device, ds_root = "/home/nicholscrawfordtaylor/data/may30/", clear_cache=False, max_size = None):
 
         # This strategy relies on consistent ordering in each array, and in each arrays construction. It may be better to make the relationship between each portion of the datapoint explicit.
         self.device = device
@@ -115,8 +115,14 @@ class AbstractDataset(Dataset):
                             np.concatenate((np.array(pc.points), np.array(pc.colors)), axis=1) for pc in datapoint_pointclouds 
                         ], axis = 0)
                         pickle.dump((point_list, offset), file)
+        
+        self.max_size = None
+        if max_size:
+            self.max_size = min(len(self), max_size)
 
     def __len__(self):
+        if self.max_size:
+            return self.max_size
         return len(self.images)
 
 class CLIPEmbedderDataset(AbstractDataset):
@@ -144,7 +150,7 @@ class DiffusionDataset(AbstractDataset):
             offset = torch.tensor(offset, dtype = torch.double)
             
             if datapoint_pointclouds.shape[0] < 256 * 6:
-                return self.__getitem__(random.randint(0, self.__len__()))
+                return self.__getitem__(random.randint(0, self.__len__() - 1))
             
             datapoint_pointclouds = datapoint_pointclouds.reshape(6, 256 ,6)
         

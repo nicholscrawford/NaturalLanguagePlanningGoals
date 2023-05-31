@@ -1,4 +1,4 @@
-experiment_dir: /home/nichols/Experiments/NLPGoals/experiments/${oc.env:DATETIME}
+experiment_dir: /home/nicholscrawfordtaylor/Experiments/NLPGoals/experiments/${oc.env:DATETIME}
 
 random_seed: 1
 device: 0
@@ -15,7 +15,7 @@ dataset:
     - index_10k
 #    - index_10k
   vocab_dir: /home/weiyu/data_drive/data_new_objects/type_vocabs_coarse.json
-  batch_size: 32
+  batch_size: 16
   max_num_objects: 5
   max_num_other_objects: 5
   max_num_shape_parameters: 5
@@ -25,7 +25,7 @@ dataset:
   filter_num_moved_objects_range:
     - 5
     - 5
-  num_workers: 4
+  num_workers: 0
   pin_memory: True
   shuffle_object_index: False
 
@@ -42,7 +42,7 @@ model:
 
 training:
   learning_rate: 0.0001
-  max_epochs: 200
+  max_epochs: 40
   l2: 0  #0.0001
   # lr_restart: 3000
   # warmup: 10
