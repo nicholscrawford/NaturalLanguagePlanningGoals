@@ -1,4 +1,4 @@
-from ConfigurationDiffuser.configuration_diffuser import TransformerDiffuser
+from ConfigurationDiffuser.configuration_diffuser import TransformerDiffuser, SimpleTransformerDiffuser
 import torch
 
 # Instantiate the model
@@ -37,4 +37,32 @@ struct_xyztheta_outputs, obj_xyztheta_outputs = model(t, pointcloud_xyzs, object
 
 # Print the output
 print(f"struct_xyztheta_outputs shape: {struct_xyztheta_outputs.shape}")
+print(f"obj_xyztheta_outputs shape: {obj_xyztheta_outputs.shape}")
+
+
+model = SimpleTransformerDiffuser( 
+                            num_attention_heads= 8,
+                            encoder_hidden_dim= 512,
+                            encoder_dropout= 0.0,
+                            encoder_activation= "relu",
+                            encoder_num_layers= 8,
+                            structure_dropout= 0,
+                            object_dropout= 0,
+                            ignore_rgb= True,
+                            )
+
+batch_size = 20
+num_objs = 5
+num_points = 512
+# Generate random input
+t = torch.randint(0, 200, (batch_size,))
+pointcloud_xyzs = torch.randn((batch_size, num_objs, num_points, 3))
+object_locations = torch.randn((batch_size, num_objs, 9))
+position_index = torch.tensor([[0, 1, 2, 3, 4] for _ in range(batch_size)])
+
+# Pass input through the model
+obj_xyztheta_outputs = model(t, pointcloud_xyzs, object_locations,
+                position_index)
+
+# Print the output
 print(f"obj_xyztheta_outputs shape: {obj_xyztheta_outputs.shape}")

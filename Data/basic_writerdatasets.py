@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import pickle
 from open3d.geometry import PointCloud
+import random
 
 class _PointCloudTransmissionFormat:
     def __init__(self, pointcloud: PointCloud):
@@ -23,9 +24,10 @@ class _PointCloudTransmissionFormat:
         return pointcloud
 
 class AbstractDataset(Dataset):
-    def __init__(self, ds_root = "/home/nichols/Data/may26/", clear_cache=False):
+    def __init__(self, device, ds_root = "/home/nichols/Data/may30/", clear_cache=False):
 
         # This strategy relies on consistent ordering in each array, and in each arrays construction. It may be better to make the relationship between each portion of the datapoint explicit.
+        self.device = device
         self.images = []
         self.pointclouds = []
         self.object_transforms = []
@@ -44,14 +46,12 @@ class AbstractDataset(Dataset):
             cwd = os.path.join(ds_root, folder)
             files = os.listdir(cwd)
             self.sim_idx = []
-            # Get metadata locations
-            metamat = [os.path.join(cwd, filename) for filename in files if "meta_" in filename]            
+            # Get image locations
+            imgs = [os.path.join(cwd, filename) for filename in files if "rgb_" in filename]            
             
-            for sim_idx_str in [name[-8:-4] for name in metamat]:
-                metamat_path = os.path.join(cwd, f"meta_{sim_idx_str}.mat")
-                # Not actually used?
-                # instance_segmentation_path = os.path.join(cwd, f"instance_segmentation_{sim_idx_str}.npy") 
-                # depth_path = os.path.join(cwd, f"distance_to_image_plane_{sim_idx_str}.npy")
+            for sim_idx_str in [name[-8:-4] for name in imgs]:
+                
+                bb_path = os.path.join(cwd, f"bounding_box_3d_{sim_idx_str}.npy")
                 pointcloud_xyz_path = os.path.join(cwd, f"pointcloud_{sim_idx_str}.npy")
                 pointcloud_rgb_path = os.path.join(cwd, f"pointcloud_rgb_{sim_idx_str}.npy")
                 pointcloud_seg_path = os.path.join(cwd, f"pointcloud_semantic_{sim_idx_str}.npy")
@@ -60,13 +60,9 @@ class AbstractDataset(Dataset):
                 # Save image path 
                 self.images.append(image_path)
                 
-                # Load from metadata file
-                annots = loadmat(metamat_path)
-                cls_idxs = annots["cls_indexes"]
-                poses = annots["poses"]
-                
                 # Save poses
-                poses = rearrange(poses, "height width object_idx -> object_idx height width")
+                #poses = rearrange(poses, "height width object_idx -> object_idx height width")
+                poses = torch.tensor(np.load(bb_path)['transform']).transpose(1,2)
                 self.object_transforms.append(poses)
 
                 # Cache pointclouds
@@ -128,12 +124,12 @@ class CLIPEmbedderDataset(AbstractDataset):
         
         with open(self.pointclouds[index], "rb") as file:
             datapoint_pointclouds, offset = pickle.load(file)
-            datapoint_pointclouds = torch.tensor(datapoint_pointclouds, dtype=torch.float).to('cuda')
-            offset = torch.tensor(offset, dtype = torch.double).to('cuda')
+            datapoint_pointclouds = torch.tensor(datapoint_pointclouds, dtype=torch.float).to(self.device)
+            offset = torch.tensor(offset, dtype = torch.double).to(self.device)
         
-        transforms = torch.tensor(self.object_transforms[index], dtype=torch.float).to('cuda')
+        transforms = torch.tensor(self.object_transforms[index], dtype=torch.float).to(self.device)
 
-        image = torch.tensor(np.asarray(Image.open(self.images[index])), dtype=torch.float).to('cuda')
+        image = torch.tensor(np.asarray(Image.open(self.images[index])), dtype=torch.float).to(self.device)
 
         x = ((datapoint_pointclouds, offset), transforms)
         y = image
@@ -144,22 +140,26 @@ class DiffusionDataset(AbstractDataset):
         
         with open(self.pointclouds[index], "rb") as file:
             datapoint_pointclouds, offset = pickle.load(file)
-            datapoint_pointclouds = torch.tensor(datapoint_pointclouds, dtype=torch.float).to('cuda')
-            offset = torch.tensor(offset, dtype = torch.double).to('cuda')
+            datapoint_pointclouds = torch.tensor(datapoint_pointclouds, dtype=torch.double)
+            offset = torch.tensor(offset, dtype = torch.double)
+            
+            if datapoint_pointclouds.shape[0] < 256 * 6:
+                return self.__getitem__(random.randint(0, self.__len__()))
+            
+            datapoint_pointclouds = datapoint_pointclouds.reshape(6, 256 ,6)
         
-        transforms = torch.tensor(self.object_transforms[index], dtype=torch.float).to('cuda')
+        transforms = self.object_transforms[index].to(dtype=torch.double)
 
-        image = torch.tensor(np.asarray(Image.open(self.images[index])), dtype=torch.float).to('cuda')
+        image = torch.tensor(np.asarray(Image.open(self.images[index])), dtype=torch.double)
 
-        x = ((datapoint_pointclouds, offset), transforms)
+        x = (datapoint_pointclouds, transforms)
         y = image
         return (x, y)
 
 if __name__ == "__main__":        
     #AbstractDataset()
-    CLIPEmbedderDataset().__getitem__(0)    
-    (((datapoint_pointclouds, offset), transforms), image) = DiffusionDataset().__getitem__(0)
+    #CLIPEmbedderDataset("cuda").__getitem__(0)    
+    ((datapoint_pointclouds, transforms), image) = DiffusionDataset("cuda").__getitem__(0)
     print(f"points shape: {datapoint_pointclouds.shape}")
-    print(f"points offset: {offset.shape}")
     print(f"transforms shape: {transforms.shape}")
     print(f"image shape: {image.shape}")
