@@ -11,6 +11,7 @@ from tqdm import tqdm
 import pickle
 from open3d.geometry import PointCloud
 import random
+from PIL import Image
 
 class _PointCloudTransmissionFormat:
     def __init__(self, pointcloud: PointCloud):
@@ -24,7 +25,7 @@ class _PointCloudTransmissionFormat:
         return pointcloud
 
 class AbstractDataset(Dataset):
-    def __init__(self, device, ds_root = "/home/nicholscrawfordtaylor/data/may30/", clear_cache=False, max_size = None):
+    def __init__(self, device, ds_root = "/home/nicholscrawfordtaylor/data/jun2/", clear_cache=False, max_size = None):
 
         # This strategy relies on consistent ordering in each array, and in each arrays construction. It may be better to make the relationship between each portion of the datapoint explicit.
         self.device = device
@@ -126,18 +127,27 @@ class AbstractDataset(Dataset):
         return len(self.images)
 
 class CLIPEmbedderDataset(AbstractDataset):
+    def __init__(self, preprocess, device):
+        super(CLIPEmbedderDataset, self).__init__(device)
+        self.preprocess = preprocess
+        
     def __getitem__(self, index):
         
         with open(self.pointclouds[index], "rb") as file:
             datapoint_pointclouds, offset = pickle.load(file)
-            datapoint_pointclouds = torch.tensor(datapoint_pointclouds, dtype=torch.float).to(self.device)
-            offset = torch.tensor(offset, dtype = torch.double).to(self.device)
+            datapoint_pointclouds = torch.tensor(datapoint_pointclouds, dtype=torch.float)
+            offset = torch.tensor(offset, dtype = torch.float)
+            
+            if datapoint_pointclouds.shape[0] < 256 * 6:
+                return self.__getitem__(random.randint(0, self.__len__() - 1))
+            
+            datapoint_pointclouds = datapoint_pointclouds.reshape(6, 256 ,6)
         
-        transforms = torch.tensor(self.object_transforms[index], dtype=torch.float).to(self.device)
+        transforms = self.object_transforms[index].to(dtype=torch.float)
 
-        image = torch.tensor(np.asarray(Image.open(self.images[index])), dtype=torch.float).to(self.device)
+        image = self.preprocess(Image.open(self.images[index]))
 
-        x = ((datapoint_pointclouds, offset), transforms)
+        x = (datapoint_pointclouds, transforms)
         y = image
         return (x, y)
     
@@ -146,17 +156,17 @@ class DiffusionDataset(AbstractDataset):
         
         with open(self.pointclouds[index], "rb") as file:
             datapoint_pointclouds, offset = pickle.load(file)
-            datapoint_pointclouds = torch.tensor(datapoint_pointclouds, dtype=torch.double)
-            offset = torch.tensor(offset, dtype = torch.double)
+            datapoint_pointclouds = torch.tensor(datapoint_pointclouds, dtype=torch.float)
+            offset = torch.tensor(offset, dtype = torch.float)
             
             if datapoint_pointclouds.shape[0] < 256 * 6:
                 return self.__getitem__(random.randint(0, self.__len__() - 1))
             
             datapoint_pointclouds = datapoint_pointclouds.reshape(6, 256 ,6)
         
-        transforms = self.object_transforms[index].to(dtype=torch.double)
+        transforms = self.object_transforms[index].to(dtype=torch.float)
 
-        image = torch.tensor(np.asarray(Image.open(self.images[index])), dtype=torch.double)
+        image = torch.tensor(np.asarray(Image.open(self.images[index])), dtype=torch.float)
 
         x = (datapoint_pointclouds, transforms)
         y = image
