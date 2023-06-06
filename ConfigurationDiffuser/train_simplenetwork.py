@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader
 import pytorch3d.transforms as tra3d
 import torch.optim as optim
 import time
+import clip
 import os
 import argparse
 from omegaconf import OmegaConf
@@ -80,10 +81,16 @@ class NoiseSchedule:
         # calculations for posterior q(x_{t-1} | x_t, x_0)
         self.posterior_variance = self.betas * (1. - self.alphas_cumprod_prev) / (1. - self.alphas_cumprod)
 
+        self.alphas_prev = F.pad(self.alphas[:-1], (1, 0), value=1.0)
+        self.sqrt_one_minus_alphas = torch.sqrt(1. - self.alphas)
+        self.sqrt_alpha_over_one_minus_alphas = torch.sqrt(self.alphas / ( 1 - self.alphas))
+        self.sqrt_alphas = torch.sqrt(self.alphas)
+        self.sqrt_alpha_over_alpha_prev = torch.sqrt(self.alphas / self.alphas_prev)
+        self.sqrt_one_minus_alpha_over_alpha_prev = torch.sqrt((1-self.alphas) / self.alphas_prev)
 
 def extract(a, t, x_shape):
     batch_size = t.shape[0]
-    out = a.gather(-1, t.cpu())
+    out = a.gather(-1, t.cpu()) 
     return out.reshape(batch_size, *((1,) * (len(x_shape) - 1))).to(t.device)
 
 
@@ -307,11 +314,11 @@ def train_model(cfg, model, data_iter, noise_schedule, optimizer, warmup, num_ep
 
         print('[Epoch:{}]:  Training Loss:{:.4}'.format(epoch, epoch_loss))
 
-        # validate_model(cfg, model, data_iter, noise_schedule, epoch, device)
+        validate_model(cfg, model, data_iter, noise_schedule, epoch, device)
 
         # evaluate(gts, predictions, ["obj_x_outputs", "obj_y_outputs", "obj_z_outputs", "obj_theta_outputs",
         #                             "struct_x_inputs", "struct_y_inputs", "struct_z_inputs", "struct_theta_inputs"])
-        #
+        
         # score = validate(cfg, model, data_iter["valid"], epoch, device)
         # if save_best_model and score > best_score:
         #     print("Saving best model so far...")
@@ -439,38 +446,9 @@ def run_model(cfg):
         torch.backends.cudnn.deterministic = True
 
     data_cfg = cfg.dataset
-    # tokenizer = Tokenizer(data_cfg.vocab_dir)
-    # vocab_size = tokenizer.get_vocab_size()
 
-    # train_dataset = SemanticArrangementDataset(data_roots=data_cfg.dirs,
-    #                                            index_roots=data_cfg.index_dirs,
-    #                                            split="train",
-    #                                            tokenizer=tokenizer,
-    #                                            max_num_objects=data_cfg.max_num_objects,
-    #                                            max_num_other_objects=data_cfg.max_num_other_objects,
-    #                                            max_num_shape_parameters=data_cfg.max_num_shape_parameters,
-    #                                            max_num_rearrange_features=data_cfg.max_num_rearrange_features,
-    #                                            max_num_anchor_features=data_cfg.max_num_anchor_features,
-    #                                            num_pts=data_cfg.num_pts,
-    #                                            filter_num_moved_objects_range=data_cfg.filter_num_moved_objects_range,
-    #                                            data_augmentation=False,
-    #                                            shuffle_object_index=data_cfg.shuffle_object_index)
-    # valid_dataset = SemanticArrangementDataset(data_roots=data_cfg.dirs,
-    #                                            index_roots=data_cfg.index_dirs,
-    #                                            split="valid",
-    #                                            tokenizer=tokenizer,
-    #                                            max_num_objects=data_cfg.max_num_objects,
-    #                                            max_num_other_objects=data_cfg.max_num_other_objects,
-    #                                            max_num_shape_parameters=data_cfg.max_num_shape_parameters,
-    #                                            max_num_rearrange_features=data_cfg.max_num_rearrange_features,
-    #                                            max_num_anchor_features=data_cfg.max_num_anchor_features,
-    #                                            num_pts=data_cfg.num_pts,
-    #                                            filter_num_moved_objects_range=data_cfg.filter_num_moved_objects_range,
-    #                                            data_augmentation=False,
-    #                                            shuffle_object_index=data_cfg.shuffle_object_index)
-
-    train_dataset = DiffusionDataset(cfg.device) #YOOO NO PARAMS 
-    valid_dataset = DiffusionDataset(cfg.device)
+    train_dataset = DiffusionDataset(cfg.device, ds_roots=data_cfg.train_dirs) 
+    valid_dataset = DiffusionDataset(cfg.device, ds_roots=data_cfg.valid_dirs)
     
     data_iter = {}
     data_iter["train"] = DataLoader(train_dataset, batch_size=data_cfg.batch_size, shuffle=True,
@@ -593,6 +571,124 @@ def sampling(cfg, model, data_iter, noise_schedule, device):
     return xs
 
 
+
+def guidance_sampling(cfg, model, data_iter, noise_schedule, device, sampling_cfg, clip_model, embedder_model):
+
+    model.eval()
+
+    text = clip.tokenize(sampling_cfg.labels).to(model.device)
+    text_features = model.encode_text(text).to(model.dtype)
+
+    for step, batch in enumerate(data_iter["valid"]):
+
+        # input
+        (datapoint_pointclouds, transforms), images = batch
+        # pointcloud is of shape (B, Num_Objects, Num_Points, 6 (xyzrgb))
+        xyzs = datapoint_pointclouds[:,:,:, :3].to(device, non_blocking=True)
+        
+        B = xyzs.shape[0]
+        # obj_pad_mask: we don't need it now since we are testing
+        obj_xyztheta_inputs = transforms.to(device, non_blocking=True)
+        position_index = torch.tensor([[0, 1, 2, 3, 4, 5] for _ in range(B)]).to(device, non_blocking=True)
+
+
+        # --------------
+        x_gt = get_diffusion_variables( obj_xyztheta_inputs)
+
+        # start from random noise
+        x = torch.randn_like(x_gt, device=device)
+        xs = []
+        for t_index in reversed(range(0, noise_schedule.timesteps)):
+
+            t = torch.full((B,), t_index, device=device, dtype=torch.long)
+
+            z_t = x[:, :, :]  # B, N, 3 + 6
+            
+            # Per step self reccurance should go here.
+            num_recurrance_steps = 1 if not sampling_cfg.per_step_self_recurrance else sampling_cfg.per_step_k
+
+            for _ in range(num_recurrance_steps):
+                epsilon_noise = model.forward(t, xyzs, z_t,
+                                                                                position_index,
+                                                                                )
+                predicted_noise = epsilon_noise
+
+                hat_z_0 = UG_S(z_t, predicted_noise, t, noise_schedule)
+                
+                if sampling_cfg.forward_guidance:
+                    z_t.requires_grad = True # Need grad for forward guidance
+                    guidance_loss = compute_guidance_loss(hat_z_0, clip_model, embedder_model)
+                    #Forward guidance
+                    sampling_strength = sampling_cfg.guidance_strength_factor * extract(noise_schedule.sqrt_one_minus_alphas, t, z_t.shape) #TODO put in config file
+                    noise_space_grad = z_t.grad
+                    forward_guided_predicted_noise = predicted_noise + sampling_strength * noise_space_grad
+
+                    predicted_noise = forward_guided_predicted_noise
+
+                if sampling_cfg.backward_guidance:
+                    delta_z = torch.zeros_like(hat_z_0)
+                    delta_z.requires_grad = True
+                    for idx in range(sampling_cfg.backwards_steps_m):
+                        
+                        loss = compute_guidance_loss(hat_z_0 + delta_z, text_features, embedder_model)
+   
+                        with torch.no_grad():
+                            delta_z = delta_z - delta_z.grad 
+                        delta_z.requires_grad = True
+                    sqrt_alpha_over_one_minus_alphas = extract(noise_schedule.sqrt_alpha_over_one_minus_alphas, t, z_t.shape)
+                    predicted_noise = predicted_noise - sqrt_alpha_over_one_minus_alphas * delta_z
+
+                hat_z_0, hat_z_t_minus_one = S(z_t, predicted_noise, t, noise_schedule)
+
+                #Resample z
+                epsilon_noise = torch.randn_like(hat_z_t_minus_one)
+                sqrt_alpha_over_alpha_prev  = extract(noise_schedule.sqrt_alpha_over_alpha_prev, t, z_t.shape)
+                sqrt_one_minus_alpha_over_alpha_prev = extract(noise_schedule.sqrt_one_minus_alpha_over_alpha_prev, t, z_t.shape)
+                z_t = sqrt_alpha_over_alpha_prev * hat_z_t_minus_one + sqrt_one_minus_alpha_over_alpha_prev * epsilon_noise
+            
+            if t_index == 0:
+                xs.append(hat_z_0)
+            else:
+                xs.append(hat_z_t_minus_one)
+        # --------------
+    return xs
+
+def compute_guidance_loss(z_0, text_features, clip_model, embedder_model):
+    # We regularize the 9d form so it more closely matches its training set.
+    z_0_regular = z_0#TODO do this
+    image_features = embedder_model(z_0_regular)
+
+    loss = F.mse_loss(image_features, text_features)
+    loss.backward()
+    return 
+
+
+def S(x, predicted_noise, t, noise_schedule):
+    betas_t = extract(noise_schedule.betas, t, x.shape)
+    sqrt_one_minus_alphas_cumprod_t = extract(noise_schedule.sqrt_one_minus_alphas_cumprod, t, x.shape)
+    sqrt_recip_alphas_t = extract(noise_schedule.sqrt_recip_alphas, t, x.shape)
+
+    #\hat{z_0} https://arxiv.org/pdf/2006.11239.pdf
+    model_mean = sqrt_recip_alphas_t * (x - betas_t * predicted_noise / sqrt_one_minus_alphas_cumprod_t)
+
+    hat_z_0 = model_mean
+
+    posterior_variance_t = extract(noise_schedule.posterior_variance, t, x.shape)
+    noise = torch.randn_like(x)
+    # Algorithm 2 line 4: \hat{z_t-1} https://arxiv.org/pdf/2006.11239.pdf
+    hat_z_t_minus_one = model_mean + torch.sqrt(posterior_variance_t) * noise
+
+    return hat_z_0, hat_z_t_minus_one
+
+# Equation 3 in https://arxiv.org/pdf/2302.07121.pdf, ref. in Algorithm 1
+def UG_S(x, predicted_noise, t, noise_schedule):
+    sqrt_recip_alphas_t = extract(noise_schedule.sqrt_recip_alphas, t, x.shape)
+    sqrt_one_minus_alphas = extract(noise_schedule.sqrt_one_minus_alphas, t, x.shape)
+
+    hat_z_0 = sqrt_recip_alphas_t * (x - sqrt_one_minus_alphas * predicted_noise )
+    return hat_z_0
+
+
 if __name__ == "__main__":
     torch.set_default_dtype(torch.double)
     
@@ -604,7 +700,7 @@ if __name__ == "__main__":
 
     assert os.path.exists(args.config_file), "Cannot find config yaml file at {}".format(args.config_file)
 
-    os.environ["DATETIME"] = time.strftime("%Y%m%d-%H%M%S")
+    os.environ["DATETIME"] = time.strftime("%Y_%m_%d-%H:%M:%S")
     cfg = OmegaConf.load(args.config_file)
 
     if not os.path.exists(cfg.experiment_dir):

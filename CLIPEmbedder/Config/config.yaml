@@ -1,0 +1,18 @@
+experiment_dir: /home/nicholscrawfordtaylor/Experiments/NLPGoals/embedder_experiments/${oc.env:DATETIME}
+
+random_seed: 1
+device: cuda
+
+clip_model: "ViT-B/32"
+
+dataset:
+  train_dirs:
+    - /home/nicholscrawfordtaylor/data/jun5_structs/
+    - /home/nicholscrawfordtaylor/data/jun5_uniform/
+  valid_dirs:
+    - /home/nicholscrawfordtaylor/data/jun6_structs/
+    - /home/nicholscrawfordtaylor/data/jun6_uniform/
+  batch_size: 16
+
+training:
+  max_epochs: 250 # Found in first experiement training up to 210 to get basically all the benefit. Was with mse loss.

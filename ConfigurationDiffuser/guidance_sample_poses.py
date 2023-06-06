@@ -3,6 +3,9 @@ import os
 import pickle
 import random
 import time
+import clip
+from CLIPEmbedder.clip_embedder import CLIPEmbedder
+from Data.basic_writerdatasets import CLIPEmbedderDataset
 
 import torch
 import numpy as np
@@ -10,14 +13,14 @@ from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 
 from ConfigurationDiffuser.train_simplenetwork import (NoiseSchedule,
-                                                       load_model, sampling)
+                                                       load_model, sampling, guidance_sampling)
 from Data.basic_writerdatasets import DiffusionDataset
 from StructDiffusion.rotation_continuity import \
     compute_rotation_matrix_from_ortho6d
 
 if __name__ == "__main__":
     torch.set_default_dtype(torch.double)
-    
+
     parser = argparse.ArgumentParser(description="Run a simple model")
     parser.add_argument("--config_file", help='config yaml file',
                         default='ConfigurationDiffuser/Config/sampling_example.yaml',
@@ -37,6 +40,11 @@ if __name__ == "__main__":
         print("Must have the show_gen_poses script running! It's needed to get the point clouds to pass into the model.")
         exit(0)
 
+    clip_model, preprocess = clip.load(cfg.clip_model, device=cfg.device)
+
+    clip_embedder = CLIPEmbedder.load_from_checkpoint(cfg.embedder_checkpoint_path, clip_model = clip_model)
+
+
     valid_dataset = DiffusionDataset(cfg.device, ds_root=cfg.pointclouds_dir, clear_cache=True)
     data_cfg = cfg.dataset
     data_iter = {}
@@ -47,7 +55,7 @@ if __name__ == "__main__":
 
     (model_cfg, model, noise_schedule, optimizer, scheduler, epoch) = load_model(cfg.model_dir)
 
-    poses = sampling(model_cfg, model, data_iter, noise_schedule, model_cfg.device)
+    poses = guidance_sampling(model_cfg, model, data_iter, noise_schedule, model_cfg.device, cfg.sampling, clip_model, clip_embedder)
     goalpose = poses[-1]
     xyzs = goalpose[:,:,:3]
     flattened_ortho6d = goalpose[:,:,3:].reshape(-1, 6)

@@ -1,0 +1,45 @@
+poses_dir: /home/nicholscrawfordtaylor/Experiments/NLPGoals/sampling/poses
+pointclouds_dir: /home/nicholscrawfordtaylor/Experiments/NLPGoals/sampling/pointclouds
+model_dir: /home/nicholscrawfordtaylor/Experiments/NLPGoals/diffusion_experiments/2023_06_05-23:44:20/model
+
+embedder_checkpoint_path: /home/nicholscrawfordtaylor/code/NaturalLanguagePlanningGoals/lightning_logs/version_28/checkpoints/epoch=10-step=3443.ckpt
+
+clip_model: ViT-B/32
+
+
+random_seed: 1
+device: 0
+
+dataset:
+  batch_size: 16
+  num_workers: 0
+  pin_memory: True
+
+sampling:
+  forward_universal_guidance: True
+  guidance_strength_factor: 10
+  backward_universal_guidance: True
+  backwards_steps_m: 5
+  per_step_self_recurrance: True
+  per_step_k: 5
+
+  labels:
+    - Objects in a circle
+    - Objects in a horizontal line
+    - Objects in a very small circle
+    - Objects in a vertical line
+    - Objects in a circle
+    - Objects in a circle
+    - Objects in a circle
+    - Objects in a circle
+    - Objects in a circle
+    - Objects in a circle
+    - Objects in a circle
+    - Objects in a circle
+    - Objects in a circle
+    - Objects in a circle
+    - Objects in a circle
+    - Objects in a circle
+
+
+
