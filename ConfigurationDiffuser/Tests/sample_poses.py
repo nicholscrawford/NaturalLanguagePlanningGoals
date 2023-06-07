@@ -37,7 +37,7 @@ if __name__ == "__main__":
         print("Must have the show_gen_poses script running! It's needed to get the point clouds to pass into the model.")
         exit(0)
 
-    valid_dataset = DiffusionDataset(cfg.device, ds_root=cfg.pointclouds_dir, clear_cache=True)
+    valid_dataset = DiffusionDataset(cfg.device, ds_roots=[cfg.pointclouds_dir], clear_cache=True)
     data_cfg = cfg.dataset
     data_iter = {}
     data_iter["train"] = None
@@ -58,6 +58,6 @@ if __name__ == "__main__":
     # print(f"{k}th element in batch.")
     # for i in range(goalpose.shape[1]):
     #     print(f"XYZ: {xyzs[k][i]} ROTATION MATRIX: {rmats[k][i]}")
-
+    print(f"Writing {xyzs.shape[0]} poses to {os.path.join(cfg.poses_dir, 'poses.pickle')}")
     with open(os.path.join(cfg.poses_dir, "poses.pickle"), 'wb') as file:
         pickle.dump((xyzs, rmats), file)

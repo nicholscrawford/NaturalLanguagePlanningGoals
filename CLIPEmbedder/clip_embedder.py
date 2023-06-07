@@ -55,6 +55,12 @@ class CLIPEmbedder(pl.LightningModule):
         self.fc = nn.Linear(112, 512)
         self.mlp = EncoderMLP(256, 80, uses_pt=True)
 
+        self.fc.to(torch.double)
+        self.object_encoder.to(torch.double)
+        self.mlp.to(torch.double)
+        self.pose_encoder.to(torch.double)
+        self.transformer.to(torch.double)
+
     def encode_pc(self, xyzs, rgbs, batch_size, num_objects):
         if self.ignore_rgb:
             center_xyz, x = self.object_encoder(xyzs, None)
@@ -95,17 +101,23 @@ class CLIPEmbedder(pl.LightningModule):
         x, y = batch
         y_pred = self(x)
         
-        y = self.clip_model.encode_image(y).to(torch.float)
+        y = y.to(torch.float)
+        y = self.clip_model.encode_image(y).to(torch.double) #Messing about with y's dtype shouldn't matter too much, since we don't care about backprop in that direction.
         y.detach_()  # Detach y from the computation graph
         loss = F.mse_loss(y_pred, y)
         self.log('train_loss', loss)
         return loss
 
-    # def validation_step(self, batch, batch_idx):
-    #     x, y = batch
-    #     y_pred = self(x)
-    #     loss = F.mse_loss(y_pred, y)
-    #     self.log('val_loss', loss)
+    def validation_step(self, batch, batch_idx):
+        x, y = batch
+        y_pred = self(x)
+        
+        y = y.to(torch.float)
+        y = self.clip_model.encode_image(y).to(torch.double) #Messing about with y's dtype shouldn't matter too much, since we don't care about backprop in that direction.
+        y.detach_()  # Detach y from the computation graph
+        loss = F.mse_loss(y_pred, y)
+        self.log('valid_loss', loss)
+        return loss
 
     # def test_step(self, batch, batch_idx):
     #     x, y = batch

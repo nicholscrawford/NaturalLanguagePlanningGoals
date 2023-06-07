@@ -42,4 +42,4 @@ if __name__ == "__main__":
 
     # train model
     trainer = pl.Trainer(default_root_dir=cfg.experiment_dir, max_epochs=cfg.training.max_epochs)
-    trainer.fit(model=clipembedder, train_dataloaders=train_loader)
+    trainer.fit(model=clipembedder, train_dataloaders=train_loader, val_dataloaders=val_loader)

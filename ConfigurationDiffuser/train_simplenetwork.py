@@ -578,6 +578,7 @@ def guidance_sampling(cfg, model, data_iter, noise_schedule, device, sampling_cf
 
     text = clip.tokenize(sampling_cfg.labels).to(model.device)
     text_features = model.encode_text(text).to(model.dtype)
+    text_features.detach_()
 
     for step, batch in enumerate(data_iter["valid"]):
 
