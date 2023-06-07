@@ -13,7 +13,7 @@ import argparse
 from omegaconf import OmegaConf
 
 from ConfigurationDiffuser.configuration_diffuser import SimpleTransformerDiffuser
-from Data.basic_writerdatasets import DiffusionDataset
+from Data.basic_writerdatasets_st import DiffusionDataset
 
 # from StructDiffusion.utils.rearrangement import show_pcs_color_order
 # from StructDiffusion.data.dataset_v1_diffuser import SemanticArrangementDataset
@@ -283,6 +283,7 @@ def train_model(cfg, model, data_iter, noise_schedule, optimizer, warmup, num_ep
 
                 #--------------
                 x_start = get_diffusion_variables(obj_xyztheta_inputs)
+                x_start = x_start + torch.randn_like(x_start, device=device) * 0.001
                 noise = torch.randn_like(x_start, device=device)
                 x_noisy = q_sample(x_start=x_start, t=t, noise_schedule=noise_schedule, noise=noise)
 
