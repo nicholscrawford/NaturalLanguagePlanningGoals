@@ -144,8 +144,12 @@ class AbstractDataset(Dataset):
             return datapoint_pointclouds
         else:
             with open(self.unsampled_pointclouds[index], "rb") as file:
-                datapoint_pointclouds = pickle.load(file)
-                
+                try:
+                    datapoint_pointclouds = pickle.load(file)
+                except:
+                    #print(Unexpected EOF)
+                    return False
+
                 sampled_datapoint_pointclouds = []
                 for object_points, object_colors in datapoint_pointclouds:
                     num_obj_points = len(object_points.squeeze())
@@ -200,11 +204,8 @@ class DiffusionDataset(AbstractDataset):
         
         transforms = self.object_transforms[index].to(dtype=torch.double)
 
-        image = torch.tensor(np.asarray(Image.open(self.images[index])), dtype=torch.double)
-
         x = (datapoint_pointclouds, transforms)
-        y = image
-        return (x, y)
+        return x
 
 if __name__ == "__main__":        
     #AbstractDataset()

@@ -13,17 +13,6 @@ from open3d.geometry import PointCloud
 import random
 from PIL import Image
 
-class _PointCloudTransmissionFormat:
-    def __init__(self, pointcloud: PointCloud):
-        self.points = np.array(pointcloud.points)
-        self.colors = np.array(pointcloud.colors)
-
-    def create_pointcloud(self) -> PointCloud:
-        pointcloud = PointCloud()
-        pointcloud.points = o3d.utility.Vector3dVector(self.points)
-        pointcloud.colors = o3d.utility.Vector3dVector(self.colors)
-        return pointcloud
-
 class AbstractDataset(Dataset):
     def __init__(self, device, ds_roots, clear_cache=False, max_size = None, resampling = True):
 
