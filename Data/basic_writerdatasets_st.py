@@ -156,7 +156,12 @@ class AbstractDataset(Dataset):
                     if  num_obj_points >= self.max_object_points:
                         point_idxs = farthest_point_sample(object_points, npoint=self.max_object_points)
                         ds_xyz = index_points(object_points, point_idxs).squeeze()
+                        ds_xyz = ds_xyz - ds_xyz.mean(dim=0)
                         ds_rgb = index_points(object_colors, point_idxs).squeeze()
+                        
+                        ds_xyz = torch.zeros_like(ds_xyz)
+                        ds_rgb = torch.zeros_like(ds_rgb)
+
                     elif num_obj_points == 0:
                         #print("Warning -- Object has no points")
                         return False
@@ -204,6 +209,10 @@ class DiffusionDataset(AbstractDataset):
         
         transforms = self.object_transforms[index].to(dtype=torch.double)
 
+        transforms[:, 0, 3] = 0.3 #x=0.3
+        transforms[:, 1, 3] = -0.3 #y=-0.3
+        transforms[:, 2, 3] = 0.1 #z=0.1
+        
         x = (datapoint_pointclouds, transforms)
         return x
 

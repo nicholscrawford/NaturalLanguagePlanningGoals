@@ -1,6 +1,6 @@
 import math
 from typing import Any, Optional
-from pytorch_lightning.utilities.types import EVAL_DATALOADERS, STEP_OUTPUT, TRAIN_DATALOADERS
+import os
 
 import torch
 import torch.nn as nn
@@ -9,12 +9,18 @@ import torch.optim as optim
 from torch.nn import TransformerEncoder, TransformerEncoderLayer
 import pytorch_lightning as pl
 import einops
+import pickle
+import random
 from torch.utils.data import DataLoader
+from pytorch_lightning.utilities.types import EVAL_DATALOADERS, STEP_OUTPUT, TRAIN_DATALOADERS
 
 from Data.basic_writerdatasets_st import DiffusionDataset
 from StructDiffusion.encoders import DropoutSampler, EncoderMLP
 from StructDiffusion.point_transformer import PointTransformerEncoderSmall
 from ConfigurationDiffuser.diffusion_utils import NoiseSchedule, extract, get_diffusion_variables, q_sample
+from StructDiffusion.rotation_continuity import \
+    compute_rotation_matrix_from_ortho6d
+
 
 class SinusoidalPositionEmbeddings(nn.Module):
     def __init__(self, dim):
@@ -52,10 +58,10 @@ class SimpleTransformerDiffuser(pl.LightningModule):
         #  don't need to be rearranged.
         self.mlp = EncoderMLP(256, 80, uses_pt=True)
         self.position_encoder = nn.Sequential(nn.Linear(3 + 6, 80))
-        self.start_token_embeddings = torch.nn.Embedding(1, 80)
+        #self.start_token_embeddings = torch.nn.Embedding(1, 80)
 
         # max number of objects or max length of sentence is 7
-        self.position_embeddings = torch.nn.Embedding(7, 16)
+        #self.position_embeddings = torch.nn.Embedding(7, 16)
 
         encoder_layers = TransformerEncoderLayer(
             240, cfg.model.num_attention_heads, cfg.model.encoder_hidden_dim, cfg.model.encoder_dropout, cfg.model.encoder_activation
@@ -178,8 +184,16 @@ class SimpleTransformerDiffuser(pl.LightningModule):
 
         predicted_noise = self._forward(t, xyzs, rgbs, transforms_t)
 
+        betas_t = extract(self.noise_schedule.betas, t, transforms_t.shape)
+        sqrt_one_minus_alphas_cumprod_t = extract(self.noise_schedule.sqrt_one_minus_alphas_cumprod, t, transforms_t.shape)
+        sqrt_recip_alphas_t = extract(self.noise_schedule.sqrt_recip_alphas, t, transforms_t.shape)
+        hat_transforms_0 = sqrt_recip_alphas_t * (transforms_t - betas_t * predicted_noise / sqrt_one_minus_alphas_cumprod_t)
+
+        loss = self.loss_function(transforms_0, hat_transforms_0)
+        self.log("val_pred_clean_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+
         loss = self.loss_function(noise, predicted_noise)
-        self.log("val_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.log("val_noise_pred_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         return loss
     
     def test_step(self, batch, batch_idx):
@@ -219,7 +233,21 @@ class SimpleTransformerDiffuser(pl.LightningModule):
 
             zs.append(z_t)
                 # --------------
-        return zs[-1]
+        z_0 =  zs[-1]
+        # Now we'e sampled, save to self.poses_dir, set by testing script
+        xyzs = z_0[:,:,:3]
+        flattened_ortho6d = z_0[:,:,3:].reshape(-1, 6)
+        flattened_rmats = compute_rotation_matrix_from_ortho6d(flattened_ortho6d)
+        rmats = flattened_rmats.reshape(z_0.shape[0],z_0.shape[1], 3, 3)
+        
+        k = random.randint(0, 16)
+        print(f"{k}th element in batch.")
+        for i in range(z_0.shape[1]):
+            print(f"XYZ: {xyzs[k][i]} ROTATION MATRIX: {rmats[k][i]}")
+
+        print(f"Writing {xyzs.shape[0]} poses to {os.path.join(self.poses_dir, 'poses.pickle')}")
+        with open(os.path.join(self.poses_dir, "poses.pickle"), 'wb') as file:
+            pickle.dump((xyzs, rmats), file)
     
     def train_dataloader(self):
         train_dataset = DiffusionDataset(self.device, ds_roots=self.cfg.dataset.train_dirs) 
