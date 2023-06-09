@@ -93,7 +93,7 @@ def get_diffusion_variables(obj_xyztheta_inputs):
     # x = torch.cat([struct_xyztheta_inputs, obj_xyztheta_inputs], dim=1)  # B, 1 + N, 9
     x = obj_xyztheta_inputs
     # print(x.shape)
-
+    x[:, :, :3] *= 10
     return x
 
 # forward diffusion (using the nice property)

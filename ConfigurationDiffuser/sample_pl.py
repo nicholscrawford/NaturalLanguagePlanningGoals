@@ -31,6 +31,15 @@ if __name__ == "__main__":
         print("Must have the show_gen_poses script running! It's needed to get the point clouds to pass into the model.")
         exit(0)
 
+    # Prompt to confirm file deletion
+    if len([file for file in os.listdir(cfg.pointclouds_dir) if "initial" in file]) > 0:
+        confirmation = input(f"Delete all initial files in {cfg.pointclouds_dir}? (y/n): ")
+
+        if confirmation.lower() == 'y':
+            # Remove all files in the directory
+            _ = [os.remove(os.path.join(cfg.pointclouds_dir, file)) for file in os.listdir(cfg.pointclouds_dir) if "initial" in file]
+            print("All initial files have been deleted.")
+
     test_dataset = DiffusionDataset(cfg.device, ds_roots=[cfg.pointclouds_dir], clear_cache=True)
     data_cfg = cfg.dataset
     test_dataloader = DataLoader(test_dataset, batch_size=data_cfg.batch_size, shuffle=False,

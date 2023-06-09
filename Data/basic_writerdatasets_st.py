@@ -158,9 +158,6 @@ class AbstractDataset(Dataset):
                         ds_xyz = index_points(object_points, point_idxs).squeeze()
                         ds_xyz = ds_xyz - ds_xyz.mean(dim=0)
                         ds_rgb = index_points(object_colors, point_idxs).squeeze()
-                        
-                        ds_xyz = torch.zeros_like(ds_xyz)
-                        ds_rgb = torch.zeros_like(ds_rgb)
 
                     elif num_obj_points == 0:
                         #print("Warning -- Object has no points")
@@ -208,10 +205,6 @@ class DiffusionDataset(AbstractDataset):
             return self.__getitem__(random.randint(0, self.__len__() - 1))
         
         transforms = self.object_transforms[index].to(dtype=torch.double)
-
-        transforms[:, 0, 3] = 0.3 #x=0.3
-        transforms[:, 1, 3] = -0.3 #y=-0.3
-        transforms[:, 2, 3] = 0.1 #z=0.1
         
         x = (datapoint_pointclouds, transforms)
         return x

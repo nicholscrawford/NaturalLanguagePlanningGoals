@@ -58,13 +58,13 @@ class SimpleTransformerDiffuser(pl.LightningModule):
         #  don't need to be rearranged.
         self.mlp = EncoderMLP(256, 80, uses_pt=True)
         self.position_encoder = nn.Sequential(nn.Linear(3 + 6, 80))
-        #self.start_token_embeddings = torch.nn.Embedding(1, 80)
+        #self.start_token_embeddings = torch.nn.Embedding(1, 256)
 
         # max number of objects or max length of sentence is 7
-        #self.position_embeddings = torch.nn.Embedding(7, 16)
+        self.position_embeddings = torch.nn.Embedding(7, 16)
 
         encoder_layers = TransformerEncoderLayer(
-            240, cfg.model.num_attention_heads, cfg.model.encoder_hidden_dim, cfg.model.encoder_dropout, cfg.model.encoder_activation
+            256, cfg.model.num_attention_heads, cfg.model.encoder_hidden_dim, cfg.model.encoder_dropout, cfg.model.encoder_activation
             )
         self.encoder = TransformerEncoder(encoder_layers, cfg.model.encoder_num_layers)
 
@@ -75,7 +75,7 @@ class SimpleTransformerDiffuser(pl.LightningModule):
             nn.Linear(80, 80),
         )
 
-        self.obj_dist = DropoutSampler(240, 3 + 6, dropout_rate=cfg.model.object_dropout)
+        self.obj_dist = DropoutSampler(256, 3 + 6, dropout_rate=cfg.model.object_dropout)
 
         if cfg.diffusion.loss_type == 'l1':
             self.loss_function = F.l1_loss
@@ -120,14 +120,14 @@ class SimpleTransformerDiffuser(pl.LightningModule):
         
         pointclouds_embed = self.encode_pc(xyzs, rgbs, batch_size, num_target_objects) # gives batch_size num_objs embed_dim
         transforms_embed = self.position_encoder(transforms)
-
+        position_embed = self.position_embeddings(torch.tensor([[0,1,2,3,4,5] for _ in range(batch_size)], device='cuda'))
         objects_embed = torch.cat([transforms_embed, pointclouds_embed], dim=-1)  # gives batch_size num_objs embed_dim
 
         #########################
         time_embed = self.time_mlp(t)  # B, dim update commented shape
         time_embed = time_embed.unsqueeze(1).repeat(1, num_target_objects, 1)  # B, N, dim
         
-        sequence_embed = torch.cat([time_embed, objects_embed], dim=-1)
+        sequence_embed = torch.cat([time_embed, objects_embed, position_embed], dim=-1)
 
         #########################
         # input to transformer needs to have dimenion [sequence_length, batch size, encoder input dimension]
@@ -236,6 +236,7 @@ class SimpleTransformerDiffuser(pl.LightningModule):
         z_0 =  zs[-1]
         # Now we'e sampled, save to self.poses_dir, set by testing script
         xyzs = z_0[:,:,:3]
+        xyzs *= 0.1
         flattened_ortho6d = z_0[:,:,3:].reshape(-1, 6)
         flattened_rmats = compute_rotation_matrix_from_ortho6d(flattened_ortho6d)
         rmats = flattened_rmats.reshape(z_0.shape[0],z_0.shape[1], 3, 3)
