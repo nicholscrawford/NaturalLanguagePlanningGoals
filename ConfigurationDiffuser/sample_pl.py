@@ -32,23 +32,33 @@ if __name__ == "__main__":
         exit(0)
 
     # Prompt to confirm file deletion
-    if len([file for file in os.listdir(cfg.pointclouds_dir) if "initial" in file]) > 0:
+    if len([file for file in os.listdir(os.path.join(cfg.pointclouds_dir,"1")) if "initial" in file]) > 0:
         confirmation = input(f"Delete all initial files in {cfg.pointclouds_dir}? (y/n): ")
-
         if confirmation.lower() == 'y':
             # Remove all files in the directory
-            _ = [os.remove(os.path.join(cfg.pointclouds_dir, file)) for file in os.listdir(cfg.pointclouds_dir) if "initial" in file]
+            _ = [os.remove(os.path.join(os.path.join(cfg.pointclouds_dir,"1"), file)) for file in os.listdir(os.path.join(cfg.pointclouds_dir,"1")) if "initial" in file]
             print("All initial files have been deleted.")
+        else:
+            exit(0)
 
     test_dataset = DiffusionDataset(cfg.device, ds_roots=[cfg.pointclouds_dir], clear_cache=True)
     data_cfg = cfg.dataset
     test_dataloader = DataLoader(test_dataset, batch_size=data_cfg.batch_size, shuffle=False,
                                     pin_memory=data_cfg.pin_memory, num_workers=data_cfg.num_workers)
     
+    def guidance_function(x):
+        loss = torch.nn.MSELoss()
+        out = loss(x[:, :, :3], torch.ones_like(x[:, :, :3]) * torch.tensor([-0.3, -0.3, 0.1], device=x.device))
+        out.backward()
+        return out
+
     # Initialize the model
     os.environ["DATETIME"] = time.strftime("%Y_%m_%d-%H:%M:%S")
     model = SimpleTransformerDiffuser.load_from_checkpoint(cfg.model_dir)
     model.poses_dir = cfg.poses_dir
+    model.sampling_cfg = cfg.sampling
+    if cfg.sampling.guidance_sampling:
+        model.guidance_function = guidance_function
 
     # Initialize the PyTorch Lightning trainer
     trainer = pl.Trainer()

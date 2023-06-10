@@ -28,7 +28,7 @@ class PoseEncoder(nn.Module):
         return self.mlp(x)
 
 class CLIPEmbedder(pl.LightningModule):
-    def __init__(self, clip_model, ignore_rgb = True):#self, input_dim, out_dim, num_heads, num_layers):
+    def __init__(self, clip_model, ignore_rgb = False):#self, input_dim, out_dim, num_heads, num_layers):
         super(CLIPEmbedder, self).__init__()
         self.clip_model = clip_model
         self.ignore_rgb = ignore_rgb
@@ -73,13 +73,14 @@ class CLIPEmbedder(pl.LightningModule):
     def forward(self, x):
         points, tfs = x
         tfs = get_diffusion_variables(tfs)
-        if self.ignore_rgb:
-            xyzs = points[:,:,:, :3]
+        xyzs = points[:,:,:, :3]
+        rgbs = points[:,:,:,3:]
         batch_size, num_target_objects, num_pts, _ = xyzs.shape
 
         #########################
         xyzs = xyzs.reshape(batch_size * num_target_objects, num_pts, -1)
-        obj_pc_embed = self.encode_pc(xyzs, None, batch_size, num_target_objects)
+        rgbs = rgbs.reshape(batch_size * num_target_objects, num_pts, -1)
+        obj_pc_embed = self.encode_pc(xyzs, rgbs, batch_size, num_target_objects)
 
         enc_tfs = self.pose_encoder(tfs)
         # x: (batch_size, sequence_length, input_dim)

@@ -188,9 +188,11 @@ class CLIPEmbedderDataset(AbstractDataset):
             return self.__getitem__(random.randint(0, self.__len__() - 1))
         
         transforms = self.object_transforms[index].to(dtype=torch.double)
-
-        image = self.preprocess(Image.open(self.images[index]))
-
+        try:
+            image = self.preprocess(Image.open(self.images[index]))
+        except:
+            print(f"Warning: Image {self.images[index]} loaded as an object for some reason.")
+            return self.__getitem__(random.randint(0, self.__len__() - 1))
         x = (datapoint_pointclouds, transforms)
         y = image
         return (x, y)

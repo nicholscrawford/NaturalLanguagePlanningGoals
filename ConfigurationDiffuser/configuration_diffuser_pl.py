@@ -197,6 +197,13 @@ class SimpleTransformerDiffuser(pl.LightningModule):
         return loss
     
     def test_step(self, batch, batch_idx):
+        if self.sampling_cfg.guidance_sampling:
+            with torch.inference_mode(mode=False):
+                self.guided_sample(batch, batch_idx)
+        else:
+            self.sample(batch, batch_idx)
+
+    def sample(self, batch, batch_idx):
         # input
         datapoint_pointclouds, transforms = batch
         # pointcloud is of shape (B, Num_Objects, Num_Points, 6 (xyzrgb))
@@ -241,15 +248,123 @@ class SimpleTransformerDiffuser(pl.LightningModule):
         flattened_rmats = compute_rotation_matrix_from_ortho6d(flattened_ortho6d)
         rmats = flattened_rmats.reshape(z_0.shape[0],z_0.shape[1], 3, 3)
         
-        k = random.randint(0, 16)
+        k = random.randint(0, 15)
         print(f"{k}th element in batch.")
         for i in range(z_0.shape[1]):
-            print(f"XYZ: {xyzs[k][i]} ROTATION MATRIX: {rmats[k][i]}")
+            print(f"XYZ: {xyzs[k][i]} ROTATION MATRIX:\n{rmats[k][i]}")
 
         print(f"Writing {xyzs.shape[0]} poses to {os.path.join(self.poses_dir, 'poses.pickle')}")
         with open(os.path.join(self.poses_dir, "poses.pickle"), 'wb') as file:
             pickle.dump((xyzs, rmats), file)
     
+    def guided_sample(self, batch, batch_idx):
+        
+        datapoint_pointclouds, transforms = batch
+        # pointcloud is of shape (B, Num_Objects, Num_Points, 6 (xyzrgb))
+        xyzs = datapoint_pointclouds[:,:,:, :3].to(self.device, non_blocking=True)
+        rgbs = datapoint_pointclouds[:,:,:, 3:].to(self.device, non_blocking=True)
+        transforms = transforms.to(self.device, non_blocking=True)
+        B = xyzs.shape[0]
+
+        # --------------
+        z_gt = get_diffusion_variables( transforms)
+
+        # start from random noise
+        z_t = torch.randn_like(z_gt, device=self.device, requires_grad=True)
+        zs = []
+        for t_index in reversed(range(0, self.noise_schedule.timesteps)):
+
+            t = torch.full((B,), t_index, device=self.device, dtype=torch.long)
+
+            num_recurrance_steps = 1 if not self.sampling_cfg.per_step_self_recurrance else self.sampling_cfg.per_step_k
+
+            for _ in range(num_recurrance_steps):
+                predicted_noise = self._forward(t, xyzs, rgbs, z_t)
+                z_t.requires_grad = True
+
+                hat_z_0 = self.UG_S(z_t, predicted_noise, t)
+
+                if self.sampling_cfg.forward_universal_guidance:
+                    guidance_loss = self.guidance_function(hat_z_0)
+                    #Forward guidance
+                    sampling_strength = self.sampling_cfg.guidance_strength_factor * extract(self.noise_schedule.sqrt_one_minus_alphas, t, z_t.shape) #TODO put in config file
+                    noise_space_grad = z_t.grad
+                    forward_guided_predicted_noise = predicted_noise + sampling_strength * noise_space_grad
+
+                    predicted_noise = forward_guided_predicted_noise
+
+                if self.sampling_cfg.backward_universal_guidance:
+                    delta_z = torch.zeros_like(hat_z_0)
+                    hat_z_0.detach_()
+                    delta_z.requires_grad = True
+                    for idx in range(self.sampling_cfg.backwards_steps_m):
+                        loss = self.guidance_function(hat_z_0 + delta_z)
+                        with torch.no_grad(): #IDK if this is needed, but I don't think it can hurt.
+                            delta_z = delta_z - delta_z.grad 
+                        delta_z.requires_grad = True
+                    sqrt_alpha_over_one_minus_alphas = extract(self.noise_schedule.sqrt_alpha_over_one_minus_alphas, t, z_t.shape)
+                    predicted_noise = predicted_noise - sqrt_alpha_over_one_minus_alphas * delta_z
+
+                hat_z_0, hat_z_t_minus_one = self.S(z_t, predicted_noise, t)
+                
+                #Resample z
+                epsilon_noise = torch.randn_like(hat_z_t_minus_one)
+                sqrt_alpha_over_alpha_prev  = extract(self.noise_schedule.sqrt_alpha_over_alpha_prev, t, z_t.shape)
+                sqrt_one_minus_alpha_over_alpha_prev = extract(self.noise_schedule.sqrt_one_minus_alpha_over_alpha_prev, t, z_t.shape)
+                z_t = sqrt_alpha_over_alpha_prev * hat_z_t_minus_one + sqrt_one_minus_alpha_over_alpha_prev * epsilon_noise
+                z_t.detach_()
+
+            if t_index == 0:
+                z_t = hat_z_0
+            else:
+                # Algorithm 2 line 4:
+                z_t = hat_z_t_minus_one
+            
+            z_t.detach_()
+            zs.append(z_t)
+                # --------------
+        z_0 =  zs[-1]
+        # Now we'e sampled, save to self.poses_dir, set by testing script
+        xyzs = z_0[:,:,:3]
+        xyzs *= 0.1
+        flattened_ortho6d = z_0[:,:,3:].reshape(-1, 6)
+        flattened_rmats = compute_rotation_matrix_from_ortho6d(flattened_ortho6d)
+        rmats = flattened_rmats.reshape(z_0.shape[0],z_0.shape[1], 3, 3)
+        
+        k = random.randint(0, 15)
+        print(f"{k}th element in batch.")
+        for i in range(z_0.shape[1]):
+            print(f"XYZ: {xyzs[k][i]} ROTATION MATRIX:\n{rmats[k][i]}")
+
+        print(f"Writing {xyzs.shape[0]} poses to {os.path.join(self.poses_dir, 'poses.pickle')}")
+        with open(os.path.join(self.poses_dir, "poses.pickle"), 'wb') as file:
+            pickle.dump((xyzs, rmats), file)
+
+    def UG_S(self, x, predicted_noise, t):
+        # Equation 3 in https://arxiv.org/pdf/2302.07121.pdf, ref. in Algorithm 1
+        sqrt_recip_alphas_t = extract(self.noise_schedule.sqrt_recip_alphas, t, x.shape)
+        sqrt_one_minus_alphas = extract(self.noise_schedule.sqrt_one_minus_alphas, t, x.shape)
+
+        hat_z_0 = sqrt_recip_alphas_t * (x - sqrt_one_minus_alphas * predicted_noise )
+        return hat_z_0
+    
+    def S(self, x, predicted_noise, t):
+        betas_t = extract(self.noise_schedule.betas, t, x.shape)
+        sqrt_one_minus_alphas_cumprod_t = extract(self.noise_schedule.sqrt_one_minus_alphas_cumprod, t, x.shape)
+        sqrt_recip_alphas_t = extract(self.noise_schedule.sqrt_recip_alphas, t, x.shape)
+
+        #\hat{z_0} https://arxiv.org/pdf/2006.11239.pdf
+        model_mean = sqrt_recip_alphas_t * (x - betas_t * predicted_noise / sqrt_one_minus_alphas_cumprod_t)
+
+        hat_z_0 = model_mean
+
+        posterior_variance_t = extract(self.noise_schedule.posterior_variance, t, x.shape)
+        noise = torch.randn_like(x)
+        # Algorithm 2 line 4: \hat{z_t-1} https://arxiv.org/pdf/2006.11239.pdf
+        hat_z_t_minus_one = model_mean + torch.sqrt(posterior_variance_t) * noise
+
+        return hat_z_0, hat_z_t_minus_one
+
     def train_dataloader(self):
         train_dataset = DiffusionDataset(self.device, ds_roots=self.cfg.dataset.train_dirs) 
         
