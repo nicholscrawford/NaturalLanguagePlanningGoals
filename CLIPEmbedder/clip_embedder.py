@@ -1,6 +1,3 @@
-from Data.ycb_datasets import CLIPEmbedderDataset
-import clip
-from PIL import Image
 
 import torch
 import torch.nn as nn
