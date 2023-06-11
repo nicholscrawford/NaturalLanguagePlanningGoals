@@ -33,9 +33,9 @@ if __name__ == "__main__":
     model, preprocess = clip.load(cfg.clip_model, device=cfg.device)
     
     print("Loading training set.")
-    train_loader = DataLoader(CLIPEmbedderDataset(preprocess = preprocess, device = cfg.device, ds_roots = cfg.dataset.train_dirs), batch_size=cfg.dataset.batch_size)
+    train_loader = DataLoader(CLIPEmbedderDataset(preprocess = preprocess, device = cfg.device, ds_roots = cfg.dataset.train_dirs), batch_size=cfg.dataset.batch_size, num_workers=cfg.dataset.num_workers)
     print("Loading validation set.")
-    val_loader = DataLoader(CLIPEmbedderDataset(preprocess = preprocess, device = cfg.device, ds_roots = cfg.dataset.valid_dirs), batch_size=cfg.dataset.batch_size)
+    val_loader = DataLoader(CLIPEmbedderDataset(preprocess = preprocess, device = cfg.device, ds_roots = cfg.dataset.valid_dirs), batch_size=cfg.dataset.batch_size, num_workers=cfg.dataset.num_workers)
     
     # model
     clipembedder = CLIPEmbedder(clip_model = model)
