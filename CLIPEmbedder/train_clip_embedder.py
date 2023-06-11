@@ -9,7 +9,7 @@ from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 
 from CLIPEmbedder.clip_embedder import CLIPEmbedder
-from Data.basic_writerdatasets_st import CLIPEmbedderDataset
+from Data.basic_writerdatasets_mem import CLIPEmbedderDataset
 
 if __name__ == "__main__":
     torch.set_default_dtype(torch.float)
