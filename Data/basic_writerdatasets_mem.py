@@ -131,6 +131,11 @@ class AbstractDataset(Dataset):
             return self.max_size
         return len(self.images)
     
+    def get_from_image_name(self, name):
+        for idx, pth in enumerate(self.images):
+            if name in pth.decode('UTF-8'):
+                return self.__getitem__(idx)
+    
     def get_pointcloud(self, index):
         if not self.resampling:
             with open(self.pointclouds[index].decode('UTF-8'), "rb") as file:
