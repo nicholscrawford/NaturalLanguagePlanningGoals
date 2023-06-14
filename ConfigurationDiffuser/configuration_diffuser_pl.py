@@ -164,7 +164,7 @@ class SimpleTransformerDiffuser(pl.LightningModule):
         predicted_noise = self._forward(t, xyzs, rgbs, transforms_t)
 
         loss = self.loss_function(noise, predicted_noise)
-        self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
         return loss
     
     def validation_step(self, batch, batch_idx):
@@ -193,7 +193,7 @@ class SimpleTransformerDiffuser(pl.LightningModule):
         self.log("val_pred_clean_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
 
         loss = self.loss_function(noise, predicted_noise)
-        self.log("val_noise_pred_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.log("val_noise_pred_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
         return loss
     
     def test_step(self, batch, batch_idx):

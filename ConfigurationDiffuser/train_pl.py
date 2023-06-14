@@ -4,6 +4,7 @@ import torch
 import argparse
 import os
 import time
+from pytorch_lightning.strategies.ddp import DDPStrategy
 
 from ConfigurationDiffuser.configuration_diffuser_pl import SimpleTransformerDiffuser
 
@@ -28,10 +29,11 @@ if __name__ == "__main__":
 
     # Initialize the model
     model = SimpleTransformerDiffuser(cfg)
-    # model = SimpleTransformerDiffuser.load_from_checkpoint("/home/nicholscrawfordtaylor/Experiments/NLPGoals/diffusion_experiments/2023_06_08-14:40:21/lightning_logs/version_0/checkpoints/epoch=439-step=14080.ckpt")
+    # model = SimpleTransformerDiffuser.load_from_checkpoint("/home/nicholscrawfordtaylor/Experiments/NLPGoals/diffusion_experiments/2023_06_09-16:27:00/lightning_logs/version_0/checkpoints/epoch=39-step=1280.ckpt")
 
     # Initialize the PyTorch Lightning trainer
     trainer = pl.Trainer(
+        strategy=DDPStrategy(find_unused_parameters=True),
         max_epochs=cfg.training.max_epochs,
         default_root_dir=cfg.experiment_dir,
         log_every_n_steps=8

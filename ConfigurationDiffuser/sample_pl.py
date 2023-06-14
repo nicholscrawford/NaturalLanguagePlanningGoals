@@ -46,11 +46,19 @@ if __name__ == "__main__":
     test_dataloader = DataLoader(test_dataset, batch_size=data_cfg.batch_size, shuffle=False,
                                     pin_memory=data_cfg.pin_memory, num_workers=data_cfg.num_workers)
     
-    def guidance_function(x):
+    def to_one_point_guidance_function(x):
         loss = torch.nn.MSELoss()
         out = loss(x[:, :, :3], torch.ones_like(x[:, :, :3]) * torch.tensor([-0.3, -0.3, 0.1], device=x.device))
         out.backward()
         return out
+    
+    def away_from_each_other_guidance_function(x):
+        # Calculate pairwise distances between objects
+        distances = torch.cdist(x[:, :, :3], x[:, :, :3], p=2)  # Euclidean distance
+        mean_distance = torch.mean(distances)
+        inverted_distance = 1 / mean_distance
+        inverted_distance.backward()
+        return inverted_distance
 
     # Initialize the model
     os.environ["DATETIME"] = time.strftime("%Y_%m_%d-%H:%M:%S")
@@ -58,7 +66,7 @@ if __name__ == "__main__":
     model.poses_dir = cfg.poses_dir
     model.sampling_cfg = cfg.sampling
     if cfg.sampling.guidance_sampling:
-        model.guidance_function = guidance_function
+        model.guidance_function = away_from_each_other_guidance_function
 
     # Initialize the PyTorch Lightning trainer
     trainer = pl.Trainer()
