@@ -4,6 +4,7 @@ import torch
 import argparse
 import os
 import time
+import itertools
 from torch.utils.data import DataLoader
 
 from ConfigurationDiffuser.configuration_diffuser_pl import SimpleTransformerDiffuser
@@ -14,7 +15,7 @@ from ConfigurationDiffuser.guidance_func import guidance_functions
 if __name__ == "__main__":
     torch.set_default_dtype(torch.double)
     
-    parser = argparse.ArgumentParser(description="Run a simple model")
+    parser = argparse.ArgumentParser(description="Grid search over sampling hyperparameters")
     parser.add_argument("--config_file", help='config yaml file',
                         default='ConfigurationDiffuser/Config/sampling_example.yaml',
                         type=str)
@@ -57,6 +58,41 @@ if __name__ == "__main__":
         model.guidance_function = guidance_function.clip_guidance_function
 
     # Initialize the PyTorch Lightning trainer
+    best_score = float('inf')
+    best_hyperparameters = None
+    ddim_steps_range = [15, 20, 25]
+    guidance_strength_factor_range = [10, 50, 200]
+    backwards_steps_m_range = [5, 15, 25]
+    backward_guidance_lr_range =[0.01, 0.05, 0.1]
+    per_step_k_range =  [3, 4, 6] 
+    combinations = itertools.product(
+        ddim_steps_range,
+        guidance_strength_factor_range,
+        backwards_steps_m_range,
+        backward_guidance_lr_range,
+        per_step_k_range 
+    )
+
     trainer = pl.Trainer()
-    loss = trainer.test(model, test_dataloader)
-    print(model.guidance_alignment)
+
+    for hyperparameters in combinations:
+        ddim_steps, guidance_strength_factor, backwards_steps_m, backward_guidance_lr, per_step_k = hyperparameters
+
+        model.sampling_cfg.ddim_steps = ddim_steps
+        model.sampling_cfg.guidance_strength_factor = guidance_strength_factor
+        model.sampling_cfg.backwards_steps_m = backwards_steps_m
+        model.sampling_cfg.backward_guidance_lr = backward_guidance_lr
+        model.sampling_cfg.per_step_k = per_step_k
+
+
+        trainer.test(model, test_dataloader)
+        score = model.guidance_alignment.mean()
+        if score < best_score:
+            best_score = score
+            best_hyperparameters = hyperparameters
+        print("Hyperparameters:", hyperparameters)
+        print("Score:", score.item())
+
+    print("Best Hyperparameters:", best_hyperparameters)
+    print("Best Score:", best_score)
+    print("Best Possible Score: ~70.18")

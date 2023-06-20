@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
 import math
+from StructDiffusion.rotation_continuity import compute_rotation_matrix_from_ortho6d
 
 ########################################################################################################################
 def cosine_beta_schedule(timesteps, s=0.008):
@@ -54,9 +55,16 @@ class NoiseSchedule:
         self.alphas_cumprod_prev = F.pad(self.alphas_cumprod[:-1], (1, 0), value=1.0)
         self.sqrt_recip_alphas = torch.sqrt(1.0 / self.alphas)
 
+        # For universal guidance eq. 9
+        self.sqrt_alphas_cumprod_over_one_minus_alphas_cumprod = torch.sqrt(self.alphas_cumprod / (1-self.alphas_cumprod))
+
+        self.sqrt_one_minus_alphas_cumprod_prev = torch.sqrt(1.0 - self.alphas_cumprod_prev)
+        self.sqrt_alphas_cumprod_prev = torch.sqrt(self.alphas_cumprod_prev)
+        
         # calculations for diffusion q(x_t | x_{t-1}) and others
         self.sqrt_alphas_cumprod = torch.sqrt(self.alphas_cumprod)
         self.sqrt_one_minus_alphas_cumprod = torch.sqrt(1. - self.alphas_cumprod)
+        self.sqrt_recip_alphas_cumprod = torch.sqrt(1.0 / self.alphas_cumprod)
 
         # calculations for posterior q(x_{t-1} | x_t, x_0)
         self.posterior_variance = self.betas * (1. - self.alphas_cumprod_prev) / (1. - self.alphas_cumprod)
