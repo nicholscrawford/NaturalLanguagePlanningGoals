@@ -16,6 +16,7 @@ def get_eval_strs(
             default = [
                 "a set of objects placed in a circle", 
                 "a set of objects placed in a straight line",
+                "a horizontal straight line of objects",
                 "a set of objects placed in a line",
                 "place the objects in a circle",
                 "place the objects in a straight line",
@@ -51,17 +52,32 @@ def eval(eval_strs, pth):
         text_features = model.encode_text(text)
         
         image_features = image_features / image_features.norm(dim=1, keepdim=True)
-        my_image_features = image_features / my_image_features.norm(dim=1, keepdim=True)
+        my_image_features = my_image_features / my_image_features.norm(dim=1, keepdim=True)
         text_features = text_features / text_features.norm(dim=1, keepdim=True)
 
+        inverse = True
+        if inverse:
+            logit_scale = model.logit_scale.exp()
+            cosine_similarity = image_features @ text_features.t()
+            inv_cosine_similarity = 1 - cosine_similarity
+            logits_per_image = logit_scale * inv_cosine_similarity
+            logits_per_text = logits_per_image.t()
+            
+            my_cosine_similarity = my_image_features.to(torch.half) @ text_features.t()
+            my_inv_cosine_similarity = 1 - my_cosine_similarity
+            my_logits_per_image = logit_scale * my_inv_cosine_similarity
+            my_logits_per_text = my_logits_per_image.t()
+
+        else:
         # cosine similarity as logits
+            logit_scale = model.logit_scale.exp()
+            logits_per_image = logit_scale * image_features @ text_features.t()
+            logits_per_text = logits_per_image.t()
+            
+            my_logits_per_image = logit_scale * my_image_features.to(torch.half) @ text_features.t()
+            my_logits_per_text = my_logits_per_image.t()
         
-        logit_scale = model.logit_scale.exp()
-        logits_per_image = logit_scale * image_features @ text_features.t()
-        logits_per_text = logits_per_image.t()
         
-        my_logits_per_image = logit_scale * my_image_features.to(torch.half) @ text_features.t()
-        my_logits_per_text = my_logits_per_image.t()
         
         print("Text Label\t\t\t\t\tCLIP Score\tMy Embedder Score")
         print("----------------------------------------------------------------------------")
@@ -70,16 +86,19 @@ def eval(eval_strs, pth):
             
 def main():
     circle_image = "rgb_0002.png"
-    line_image = "rgb_0000.png"
+    line_image = "rgb_0008.png"
+    uniform_image = "rgb_0049.png"
     
+    eval_strs = get_eval_strs()
     
     print(f"Testing circle image {circle_image}")
-    eval_strs = get_eval_strs()
     eval(eval_strs, circle_image)
         
     print(f"Testing line image {line_image}")
-    eval_strs = get_eval_strs()
     eval(eval_strs, line_image)
+    
+    print(f"Testing uniform image {uniform_image}")
+    eval(eval_strs, uniform_image)
    
         
 if __name__ == "__main__":
