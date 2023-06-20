@@ -1,0 +1,22 @@
+# TODO Test this better
+
+setuptools==60.2.0
+y-py==0.6.0
+starlette==0.22.0
+numpy
+torch
+torchvision
+torchaudio
+lightning
+argparse
+matplotlib
+chainer
+tensorboard
+open3d
+ftfy
+regex
+tqdm
+git+https://github.com/openai/CLIP.git
+#-e git+ssh://git@github.com/nicholscrawford/NaturalLanguagePlanningGoals.git#egg=NaturalLanguagePlanningGoals
+omegaconf
+einops
