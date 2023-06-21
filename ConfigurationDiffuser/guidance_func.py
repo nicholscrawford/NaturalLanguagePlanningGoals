@@ -11,11 +11,12 @@ class guidance_functions:
                 self.model, preprocess = clip.load(config.clip_model, device=device)
                 torch.set_default_dtype(torch.double)
                 self.embedder_model = CLIPEmbedder.load_from_checkpoint(config.embedder_checkpoint_path, clip_model=self.model).to(self.device)
+                self.embedder_model.eval()
                 text = clip.tokenize(config.labels).to(self.device)
                 self.text_features = self.model.encode_text(text)
                 self.text_features = self.text_features / self.text_features.norm(dim=1, keepdim=True)
 
-        def clip_guidance_function(self, xyz, rgbs, tfs):
+        def clip_guidance_function_logits(self, xyz, rgbs, tfs):
                 logit_scale = self.model.logit_scale.exp()
                 
                 points = torch.cat((xyz, rgbs), dim=3)
@@ -48,6 +49,34 @@ class guidance_functions:
                 self.text_features.detach_()
                 #print(inv_logits_per_image.mean().item())
                 return inv_logits_per_image
+        
+        def clip_guidance_function(self, xyz, rgbs, tfs):                
+                points = torch.cat((xyz, rgbs), dim=3)
+                xyzs = tfs[:,:,:3]
+                ortho6d = tfs[:,:,3:]
+                B, N, _ = ortho6d.shape
+                ortho6d = rearrange(ortho6d, "B N C -> (B N) C")
+                rmats = compute_rotation_matrix_from_ortho6d(ortho6d)
+                rmats = rearrange(rmats, "(B N) H W -> B N H W", B=B, N=N)
+
+                # Expand dimensions to match the homogeneous matrix shape
+                xyzs = xyzs.unsqueeze(-1)
+                identity = torch.eye(4).unsqueeze(0).unsqueeze(0)
+                identity = identity.to(rmats.device)
+
+                # Construct the homogeneous matrix
+                tfs = torch.cat((torch.cat((rmats, xyzs), dim=-1), identity.repeat(16, 6, 1, 1)[:,:,3,:].unsqueeze(2)), dim=-2)
+
+
+                my_image_features = self.embedder_model((points, tfs))
+                my_image_features = my_image_features / my_image_features.norm(dim=1, keepdim=True)
+
+                cosine_similarity = my_image_features.to(torch.half) @ self.text_features.t()
+                inv_cosine_similarity = 1 - cosine_similarity
+                inv_scale_per_image = inv_cosine_similarity.squeeze()
+
+                self.text_features.detach_()
+                return inv_scale_per_image
                 
         def to_one_point_guidance_function(self, xyzs, rgbs, tfs):
                 loss = torch.nn.MSELoss()
@@ -60,5 +89,5 @@ class guidance_functions:
                 distances = torch.cdist(tfs[:, :, :3], tfs[:, :, :3], p=2)  # Euclidean distance
                 mean_distance = torch.mean(distances)
                 inverted_distance = 1 / mean_distance
-                inverted_distance.backward()
+                #inverted_distance.backward()
                 return inverted_distance

@@ -54,9 +54,11 @@ if __name__ == "__main__":
     model.poses_dir = cfg.poses_dir
     model.sampling_cfg = cfg.sampling
     if cfg.sampling.guidance_sampling:
-        model.guidance_function = guidance_function.clip_guidance_function
+        model.guidance_function = guidance_function.clip_guidance_function_logits
+        # model.guidance_function = guidance_function.clip_guidance_function
+        # model.guidance_function = guidance_function.away_from_each_other_guidance_function
 
     # Initialize the PyTorch Lightning trainer
     trainer = pl.Trainer()
     loss = trainer.test(model, test_dataloader)
-    print(model.guidance_alignment)
+    # print(model.guidance_alignment)

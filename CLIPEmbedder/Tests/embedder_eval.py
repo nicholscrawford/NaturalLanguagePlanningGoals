@@ -11,6 +11,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 model, preprocess = clip.load("ViT-B/32", device=device)
 dataset = CLIPEmbedderDataset(preprocess, device, ["CLIPEmbedder/Tests/Data"])
 embedder_model = CLIPEmbedder.load_from_checkpoint("/home/nichols/Experiments/NLPGoals/embedder_experiments/lightning_logs/version_49970/checkpoints/epoch=352-step=434896.ckpt", clip_model=model)
+use_logits = False
 
 def get_eval_strs(
             default = [
@@ -54,10 +55,11 @@ def eval(eval_strs, pth):
         image_features = image_features / image_features.norm(dim=1, keepdim=True)
         my_image_features = my_image_features / my_image_features.norm(dim=1, keepdim=True)
         text_features = text_features / text_features.norm(dim=1, keepdim=True)
+        
+        logit_scale = model.logit_scale.exp() if use_logits else 1
 
         inverse = True
         if inverse:
-            logit_scale = model.logit_scale.exp()
             cosine_similarity = image_features @ text_features.t()
             inv_cosine_similarity = 1 - cosine_similarity
             logits_per_image = logit_scale * inv_cosine_similarity

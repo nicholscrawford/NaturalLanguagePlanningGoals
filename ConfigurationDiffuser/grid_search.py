@@ -60,11 +60,11 @@ if __name__ == "__main__":
     # Initialize the PyTorch Lightning trainer
     best_score = float('inf')
     best_hyperparameters = None
-    ddim_steps_range = [15, 20, 25]
-    guidance_strength_factor_range = [10, 50, 200]
-    backwards_steps_m_range = [5, 15, 25]
-    backward_guidance_lr_range =[0.01, 0.05, 0.1]
-    per_step_k_range =  [3, 4, 6] 
+    ddim_steps_range = [20, 30]
+    guidance_strength_factor_range = [10, 50, 200] #200
+    backwards_steps_m_range = [5, 15, 25] #25
+    backward_guidance_lr_range =[0.01, 0.05, 0.1] #0.01
+    per_step_k_range =  [3, 4, 6] #6
     combinations = itertools.product(
         ddim_steps_range,
         guidance_strength_factor_range,

@@ -200,7 +200,7 @@ class SimpleTransformerDiffuser(pl.LightningModule):
     def test_step(self, batch, batch_idx):
         if self.sampling_cfg.ddim:
             if self.sampling_cfg.guidance_sampling:
-                with torch.inference_mode(mode=False):
+                with torch.inference_mode(mode=False): #Inference Mode != Eval 
                     self.ddim_guided_sample(batch, batch_idx, self.sampling_cfg.ddim_steps)
             else:
                 self.ddim_sample(batch, batch_idx, self.sampling_cfg.ddim_steps)
@@ -413,7 +413,8 @@ class SimpleTransformerDiffuser(pl.LightningModule):
 
     #Refactoring a bit could be useful, or mabye just deleting non ddim sampling.
     def ddim_guided_sample(self, batch, batch_idx, num_steps):
-        
+        loss_printing = True
+        update_z_zero_mid_guidance = False #This may decrease performance?
         datapoint_pointclouds, transforms = batch
         # pointcloud is of shape (B, Num_Objects, Num_Points, 6 (xyzrgb))
         xyzs = datapoint_pointclouds[:,:,:, :3].to(self.device, non_blocking=True)
@@ -444,6 +445,7 @@ class SimpleTransformerDiffuser(pl.LightningModule):
 
                 if self.sampling_cfg.forward_universal_guidance:
                     guidance_loss = self.guidance_function(xyzs, rgbs ,hat_z_0)
+                    if loss_printing: print("\033[0mPre forward loss: \033[93m", guidance_loss.mean().item())
                     guidance_loss.mean().backward()
                     #Forward guidance
                     sampling_strength = self.sampling_cfg.guidance_strength_factor * extract(self.noise_schedule.sqrt_one_minus_alphas_cumprod, t, z_t.shape)
@@ -452,14 +454,22 @@ class SimpleTransformerDiffuser(pl.LightningModule):
 
                     predicted_noise = forward_guided_predicted_noise
 
+                # Updating z_0 before backward guidance?
+                if update_z_zero_mid_guidance: hat_z_0 = self.UG_S(z_t, predicted_noise, t)
+                if loss_printing:
+                    hat_z_0_ = self.UG_S(z_t, predicted_noise, t)
+                    guidance_loss = self.guidance_function(xyzs, rgbs ,hat_z_0_)
+                    print("\033[0mPost forward loss: \033[91m", guidance_loss.mean().item())
+
                 if self.sampling_cfg.backward_universal_guidance:
                     hat_z_0.detach_()
                     delta_z = torch.zeros_like(hat_z_0, requires_grad=True)
+                    #optimizer = torch.optim.SGD([delta_z], lr=self.sampling_cfg.backward_guidance_lr)
                     optimizer = torch.optim.Adam([delta_z], lr=self.sampling_cfg.backward_guidance_lr)
-
                     for idx in range(self.sampling_cfg.backwards_steps_m):
                         optimizer.zero_grad()
-                        loss = self.guidance_function(xyzs, rgbs, hat_z_0 + delta_z)
+                        loss = self.guidance_function(xyzs, rgbs, hat_z_0 + delta_z) #Why is there incosistent loss with no delta change?
+                        if loss_printing: print("\033[0mMid backward loss: \033[96m", loss.mean().item())
                         loss.mean().backward()
                         optimizer.step()
 
@@ -468,6 +478,9 @@ class SimpleTransformerDiffuser(pl.LightningModule):
 
                 #With backward guidance done, we need to move on to our next step.
                 hat_z_0 = self.UG_S(z_t, predicted_noise, t)
+                if loss_printing:
+                    loss = self.guidance_function(xyzs, rgbs, hat_z_0)
+                    print("\033[0mPost backward loss: \033[94m", loss.mean().item())
 
                 if t_index == 0:
                     break
@@ -560,3 +573,4 @@ class SimpleTransformerDiffuser(pl.LightningModule):
         return DataLoader(valid_dataset, batch_size=self.cfg.dataset.batch_size, shuffle=False,
                                         pin_memory=self.cfg.dataset.pin_memory, num_workers=self.cfg.dataset.num_workers)
         
+
