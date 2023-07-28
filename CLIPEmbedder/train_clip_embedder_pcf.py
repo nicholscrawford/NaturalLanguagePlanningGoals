@@ -9,7 +9,7 @@ from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 
 from CLIPEmbedder.clip_embedder_pcf import CLIPEmbedder
-from Data.pcf_dataset import CLIPEmbedderDataset, collate_fn
+from Data.pcf_dataset import CLIPEmbedderDataset
 
 if __name__ == "__main__":
     torch.set_default_dtype(torch.float)
@@ -34,9 +34,11 @@ if __name__ == "__main__":
     model, preprocess = clip.load(cfg.clip_model, device=cfg.device)
     
     print("Loading training set.")
-    train_loader = DataLoader(CLIPEmbedderDataset(preprocess = preprocess, device = cfg.device, ds_roots = cfg.dataset.train_dirs), batch_size=cfg.dataset.batch_size, num_workers=cfg.dataset.num_workers, collate_fn=collate_fn)
+    train_ds = CLIPEmbedderDataset(preprocess = preprocess, device = cfg.device, ds_roots = cfg.dataset.train_dirs)
+    train_loader = DataLoader(train_ds, batch_size=cfg.dataset.batch_size, num_workers=cfg.dataset.num_workers, collate_fn=train_ds.collate_fn)
     print("Loading validation set.")
-    val_loader = DataLoader(CLIPEmbedderDataset(preprocess = preprocess, device = cfg.device, ds_roots = cfg.dataset.valid_dirs), batch_size=cfg.dataset.batch_size, num_workers=cfg.dataset.num_workers, collate_fn=collate_fn)
+    val_ds = CLIPEmbedderDataset(preprocess = preprocess, device = cfg.device, ds_roots = cfg.dataset.valid_dirs)
+    val_loader = DataLoader(val_ds, batch_size=cfg.dataset.batch_size, num_workers=cfg.dataset.num_workers, collate_fn=val_ds.collate_fn)
     
     # model
     clipembedder = CLIPEmbedder(clip_model = model)

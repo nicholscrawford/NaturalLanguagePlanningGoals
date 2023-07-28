@@ -5,18 +5,26 @@ random_seed: 1
 
 dataset:
   train_dirs:
-    #- /home/nicholscrawfordtaylor/data/jun5_structs/
-    #- /home/nicholscrawfordtaylor/data/jun7_structs/
-    - /home/nicholscrawfordtaylor/data/jun8_simple_circles
+    - /home/nicholscrawfordtaylor/data/NaturalLanguagePlanningGoals/jul4
+    # - /home/nicholscrawfordtaylor/data/jun5_structs/
+    # - /home/nicholscrawfordtaylor/data/jun7_structs/
+    # - /home/nicholscrawfordtaylor/data/jun8_simple_circles
+    # - /home/nicholscrawfordtaylor/data/jun9_shuffled_circles
+    #- /home/nicholscrawfordtaylor/data/jun10_unshuffled_structs
+    # - /home/nicholscrawfordtaylor/data/jun13_uniform_flat
   valid_dirs:
-    #- /home/nicholscrawfordtaylor/data/jun6_structs/
-    - /home/nicholscrawfordtaylor/data/jun8_simple_circles_val
-  batch_size: 32
+    - /home/nicholscrawfordtaylor/data/NaturalLanguagePlanningGoals/jul4_val
+    # - /home/nicholscrawfordtaylor/data/jun6_structs/
+    # - /home/nicholscrawfordtaylor/data/jun8_simple_circles_val
+    # - /home/nicholscrawfordtaylor/data/jun9_shuffled_circles_val
+    #- /home/nicholscrawfordtaylor/data/jun10_unshuffled_structs_val
+    #- /home/nicholscrawfordtaylor/data/jun13_uniform_flat_val
+  batch_size: 16
  
-  num_pts: 256
+  # num_pts: 256
 
-  num_workers: 6
-  pin_memory: True
+  num_workers: 1
+  pin_memory: False
   shuffle_object_index: False
 
 model:
@@ -31,7 +39,7 @@ model:
 
 training:
   learning_rate: 0.0001
-  max_epochs: 500
+  max_epochs: 1000
   l2: 0  #0.0001
   # lr_restart: 3000
   # warmup: 10

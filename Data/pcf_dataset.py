@@ -127,6 +127,54 @@ class CLIPEmbedderDataset(AbstractDataset):
         y = image
         return (x, y)
     
+    def collate_fn(self, data_list):
+        transforms_list = []
+        images = []
+
+        npoints = sum(sum(element.pos.shape[0] for element in datum[0][0]) for datum in data_list)
+        nobjs = sum(sum(1 for element in datum[0][0]) for datum in data_list)
+        pc_rgbs = np.empty((npoints, 3), dtype=np.float32)
+        pc_xyzs = np.empty((npoints, 3), dtype=np.float32)
+        pc_norms = np.empty((npoints, 3), dtype=np.float32)
+        encoder_batch_idxs = np.empty(npoints, dtype=np.int)
+        post_encoder_batch_idxs = np.empty(nobjs, dtype=np.int)
+
+        encoder_batch_idx = 0
+        encoder_batch_idx_start = 0
+        post_encoder_batch_idx = 0
+        post_encoder_batch_idx_start = 0
+        for element in data_list:
+            (pointcloud_data, transforms), image = element
+            transforms_list.append(transforms.unsqueeze(0))
+            images.append(image.unsqueeze(0))
+
+            end_index = post_encoder_batch_idx_start + len(pointcloud_data)
+            post_encoder_batch_idxs[post_encoder_batch_idx_start: end_index] =post_encoder_batch_idx
+            post_encoder_batch_idx += 1
+            post_encoder_batch_idx_start = end_index
+            for object_pointcloud in pointcloud_data:
+                end_index = encoder_batch_idx_start + object_pointcloud.pos.shape[0]
+                pc_rgbs[encoder_batch_idx_start:end_index] = object_pointcloud.rgb
+                pc_xyzs[encoder_batch_idx_start:end_index] = object_pointcloud.pos
+                pc_norms[encoder_batch_idx_start:end_index] = object_pointcloud.norm
+                encoder_batch_idxs[encoder_batch_idx_start:end_index] = encoder_batch_idx
+                encoder_batch_idx += 1
+                encoder_batch_idx_start = end_index
+            
+        transforms_batch = torch.cat(transforms_list)
+        images_batch = torch.cat(images)
+
+        device = "cuda"
+        dtype = torch.float64
+        pc_rgbs = torch.tensor(pc_rgbs).to(device).to(dtype)
+        pc_xyzs = torch.tensor(pc_xyzs).to(device).to(dtype)
+        pc_norms = torch.tensor(pc_norms).to(device).to(dtype)
+        encoder_batch_idxs = torch.tensor(encoder_batch_idxs).to(device)
+        post_encoder_batch_idxs = torch.tensor(post_encoder_batch_idxs).to(device)
+        transforms_batch = transforms_batch.to(device).to(dtype)
+
+        return ((pc_rgbs, pc_xyzs, pc_norms, encoder_batch_idxs, post_encoder_batch_idxs, transforms_batch), images_batch)
+    
 class DiffusionDataset(AbstractDataset):
     def __getitem__(self, index):
         
@@ -137,53 +185,51 @@ class DiffusionDataset(AbstractDataset):
         x = (datapoint_pointclouds, transforms)
         return x
     
-def collate_fn(data_list):
-    transforms_list = []
-    images = []
+    def collate_fn(self, data_list):
+        transforms_list = []
+        images = []
 
-    npoints = sum(sum(element.pos.shape[0] for element in datum[0][0]) for datum in data_list)
-    nobjs = sum(sum(1 for element in datum[0][0]) for datum in data_list)
-    pc_rgbs = np.empty((npoints, 3), dtype=np.float32)
-    pc_xyzs = np.empty((npoints, 3), dtype=np.float32)
-    pc_norms = np.empty((npoints, 3), dtype=np.float32)
-    encoder_batch_idxs = np.empty(npoints, dtype=np.int)
-    post_encoder_batch_idxs = np.empty(nobjs, dtype=np.int)
+        npoints = sum(sum(element.pos.shape[0] for element in datum[0]) for datum in data_list)
+        nobjs = sum([len(objs) for objs in [datum[0] for datum in data_list]])
+        pc_rgbs = np.empty((npoints, 3), dtype=np.float32)
+        pc_xyzs = np.empty((npoints, 3), dtype=np.float32)
+        pc_norms = np.empty((npoints, 3), dtype=np.float32)
+        encoder_batch_idxs = np.empty(npoints, dtype=np.int)
+        post_encoder_batch_idxs = np.empty(nobjs, dtype=np.int)
 
-    encoder_batch_idx = 0
-    encoder_batch_idx_start = 0
-    post_encoder_batch_idx = 0
-    post_encoder_batch_idx_start = 0
-    for element in data_list:
-        (pointcloud_data, transforms), image = element
-        transforms_list.append(transforms.unsqueeze(0))
-        images.append(image.unsqueeze(0))
+        encoder_batch_idx = 0
+        encoder_batch_idx_start = 0
+        post_encoder_batch_idx = 0
+        post_encoder_batch_idx_start = 0
+        for element in data_list:
+            pointcloud_data, transforms = element
+            transforms_list.append(transforms.unsqueeze(0))
 
-        end_index = post_encoder_batch_idx_start + len(pointcloud_data)
-        post_encoder_batch_idxs[post_encoder_batch_idx_start: end_index] =post_encoder_batch_idx
-        post_encoder_batch_idx += 1
-        post_encoder_batch_idx_start = end_index
-        for object_pointcloud in pointcloud_data:
-            end_index = encoder_batch_idx_start + object_pointcloud.pos.shape[0]
-            pc_rgbs[encoder_batch_idx_start:end_index] = object_pointcloud.rgb
-            pc_xyzs[encoder_batch_idx_start:end_index] = object_pointcloud.pos
-            pc_norms[encoder_batch_idx_start:end_index] = object_pointcloud.norm
-            encoder_batch_idxs[encoder_batch_idx_start:end_index] = encoder_batch_idx
-            encoder_batch_idx += 1
-            encoder_batch_idx_start = end_index
-        
-    transforms_batch = torch.cat(transforms_list)
-    images_batch = torch.cat(images)
+            end_index = post_encoder_batch_idx_start + len(pointcloud_data)
+            post_encoder_batch_idxs[post_encoder_batch_idx_start: end_index] =post_encoder_batch_idx
+            post_encoder_batch_idx += 1
+            post_encoder_batch_idx_start = end_index
+            for object_pointcloud in pointcloud_data:
+                end_index = encoder_batch_idx_start + object_pointcloud.pos.shape[0]
+                pc_rgbs[encoder_batch_idx_start:end_index] = object_pointcloud.rgb
+                pc_xyzs[encoder_batch_idx_start:end_index] = object_pointcloud.pos
+                pc_norms[encoder_batch_idx_start:end_index] = object_pointcloud.norm
+                encoder_batch_idxs[encoder_batch_idx_start:end_index] = encoder_batch_idx
+                encoder_batch_idx += 1
+                encoder_batch_idx_start = end_index
+            
+        transforms_batch = torch.cat(transforms_list)
 
-    device = "cuda"
-    dtype = torch.float64
-    pc_rgbs = torch.tensor(pc_rgbs).to(device).to(dtype)
-    pc_xyzs = torch.tensor(pc_xyzs).to(device).to(dtype)
-    pc_norms = torch.tensor(pc_norms).to(device).to(dtype)
-    encoder_batch_idxs = torch.tensor(encoder_batch_idxs).to(device)
-    post_encoder_batch_idxs = torch.tensor(post_encoder_batch_idxs).to(device)
-    transforms_batch = transforms_batch.to(device).to(dtype)
+        device = "cuda"
+        dtype = torch.float64
+        pc_rgbs = torch.tensor(pc_rgbs).to(device).to(dtype)
+        pc_xyzs = torch.tensor(pc_xyzs).to(device).to(dtype)
+        pc_norms = torch.tensor(pc_norms).to(device).to(dtype)
+        encoder_batch_idxs = torch.tensor(encoder_batch_idxs).to(device)
+        post_encoder_batch_idxs = torch.tensor(post_encoder_batch_idxs).to(device)
+        transforms_batch = transforms_batch.to(device).to(dtype)
 
-    return ((pc_rgbs, pc_xyzs, pc_norms, encoder_batch_idxs, post_encoder_batch_idxs, transforms_batch), images_batch)
+        return (pc_rgbs, pc_xyzs, pc_norms, encoder_batch_idxs, post_encoder_batch_idxs, transforms_batch)
 
 
 if __name__ == "__main__":        

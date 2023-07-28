@@ -6,7 +6,6 @@ import pytorch_lightning as pl
 from einops import rearrange
 import torch.nn.utils.rnn as rnn_utils
 
-from StructDiffusion.point_transformer import PointTransformerEncoderSmall
 from ConfigurationDiffuser.train_simplenetwork import get_diffusion_variables
 from ConfigurationDiffuser.configuration_diffuser import EncoderMLP
 from pointconvformer_wrapper import PointConvFormerEncoder
