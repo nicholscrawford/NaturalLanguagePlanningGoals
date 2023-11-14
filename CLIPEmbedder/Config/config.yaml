@@ -10,8 +10,8 @@ dataset:
     - /home/nicholscrawfordtaylor/data/NaturalLanguagePlanningGoals/jul4
   valid_dirs:
     - /home/nicholscrawfordtaylor/data/NaturalLanguagePlanningGoals/jul4_val
-  batch_size: 16
-  num_workers: 1
+  batch_size: 32
+  num_workers: 7
 
 training:
-  max_epochs: 1000 # Found in first experiement training up to 210 to get basically all the benefit. Was with mse loss.
+  max_epochs: 1000 # 1000 # Found in first experiement training up to 210 to get basically all the benefit. Was with mse loss.

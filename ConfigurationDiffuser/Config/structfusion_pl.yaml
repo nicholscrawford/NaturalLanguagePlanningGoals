@@ -1,4 +1,4 @@
-experiment_dir: /home/nicholscrawfordtaylor/Experiments/NLPGoals/diffusion_experiments/${oc.env:DATETIME}
+experiment_dir: /home/nicholscrawfordtaylor/Experiments/NLPGoals/diffusion_experiments_pl/${oc.env:DATETIME}
 
 random_seed: 1
 
@@ -19,11 +19,11 @@ dataset:
     # - /home/nicholscrawfordtaylor/data/jun9_shuffled_circles_val
     #- /home/nicholscrawfordtaylor/data/jun10_unshuffled_structs_val
     #- /home/nicholscrawfordtaylor/data/jun13_uniform_flat_val
-  batch_size: 16
+  batch_size: 20
  
   # num_pts: 256
 
-  num_workers: 1
+  num_workers: 0
   pin_memory: False
   shuffle_object_index: False
 
@@ -38,7 +38,7 @@ model:
 
 
 training:
-  learning_rate: 0.0001
+  learning_rate: 0.001
   max_epochs: 1000
   l2: 0  #0.0001
   # lr_restart: 3000

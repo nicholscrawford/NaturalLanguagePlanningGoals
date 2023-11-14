@@ -14,6 +14,7 @@ from Data.pcf_dataset import CLIPEmbedderDataset
 if __name__ == "__main__":
     torch.set_default_dtype(torch.float)
     torch.multiprocessing.set_start_method('spawn')
+    from lightning.pytorch.profilers import AdvancedProfiler
     
     parser = argparse.ArgumentParser(description="Run a simple model")
     parser.add_argument("--config_file", help='config yaml file',
@@ -34,15 +35,18 @@ if __name__ == "__main__":
     model, preprocess = clip.load(cfg.clip_model, device=cfg.device)
     
     print("Loading training set.")
-    train_ds = CLIPEmbedderDataset(preprocess = preprocess, device = cfg.device, ds_roots = cfg.dataset.train_dirs)
+    train_ds = CLIPEmbedderDataset(preprocess = preprocess, device = cfg.device, ds_roots = cfg.dataset.train_dirs, max_size=300)
     train_loader = DataLoader(train_ds, batch_size=cfg.dataset.batch_size, num_workers=cfg.dataset.num_workers, collate_fn=train_ds.collate_fn)
     print("Loading validation set.")
-    val_ds = CLIPEmbedderDataset(preprocess = preprocess, device = cfg.device, ds_roots = cfg.dataset.valid_dirs)
+    val_ds = CLIPEmbedderDataset(preprocess = preprocess, device = cfg.device, ds_roots = cfg.dataset.valid_dirs, max_size=20)
     val_loader = DataLoader(val_ds, batch_size=cfg.dataset.batch_size, num_workers=cfg.dataset.num_workers, collate_fn=val_ds.collate_fn)
     
     # model
     clipembedder = CLIPEmbedder(clip_model = model)
 
+
     # train model
-    trainer = pl.Trainer(default_root_dir=cfg.experiment_dir, max_epochs=cfg.training.max_epochs)
+    profiler = AdvancedProfiler(dirpath=".", filename="perf_logs")
+
+    trainer = pl.Trainer(default_root_dir=cfg.experiment_dir, max_epochs=cfg.training.max_epochs, profiler=profiler)
     trainer.fit(model=clipembedder, train_dataloaders=train_loader, val_dataloaders=val_loader)

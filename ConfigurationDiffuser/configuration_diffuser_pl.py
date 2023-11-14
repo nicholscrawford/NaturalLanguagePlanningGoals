@@ -120,7 +120,7 @@ class SimpleTransformerDiffuser(pl.LightningModule):
         
         pointclouds_embed = self.encode_pc(xyzs, rgbs, batch_size, num_target_objects) # gives batch_size num_objs embed_dim
         transforms_embed = self.position_encoder(transforms)
-        position_embed = self.position_embeddings(torch.tensor([[0,1,2,3,4,5] for _ in range(batch_size)], device='cuda'))
+        position_embed = self.position_embeddings(torch.tensor([[0,1,2,3] for _ in range(batch_size)], device='cuda'))
         objects_embed = torch.cat([transforms_embed, pointclouds_embed], dim=-1)  # gives batch_size num_objs embed_dim
 
         #########################
@@ -187,7 +187,7 @@ class SimpleTransformerDiffuser(pl.LightningModule):
         betas_t = extract(self.noise_schedule.betas, t, transforms_t.shape)
         sqrt_one_minus_alphas_cumprod_t = extract(self.noise_schedule.sqrt_one_minus_alphas_cumprod, t, transforms_t.shape)
         sqrt_recip_alphas_t = extract(self.noise_schedule.sqrt_recip_alphas, t, transforms_t.shape)
-        hat_transforms_0 = sqrt_recip_alphas_t * (transforms_t - betas_t * predicted_noise / sqrt_one_minus_alphas_cumprod_t)
+        #hat_transforms_0 = sqrt_recip_alphas_t * (transforms_t - betas_t * predicted_noise / sqrt_one_minus_alphas_cumprod_t)
 
         ddim_hat_z_0 = self.UG_S(transforms_t, predicted_noise, t)
         loss = self.loss_function(transforms_0, ddim_hat_z_0)
@@ -278,7 +278,8 @@ class SimpleTransformerDiffuser(pl.LightningModule):
         z_gt = get_diffusion_variables( transforms)
 
         # start from random noise
-        z_t = torch.randn_like(z_gt, device=self.device)
+        z_t = torch.randn_like(z_gt, device=self.device, dtype=torch.double)
+        z_t[:, :, 2] += 2
         zs = []
         timesteps = range(0, self.noise_schedule.timesteps, self.noise_schedule.timesteps // num_steps)
         for step_idx in reversed(range(len(timesteps))):
@@ -426,7 +427,10 @@ class SimpleTransformerDiffuser(pl.LightningModule):
         z_gt = get_diffusion_variables( transforms)
 
         # start from random noise
-        z_t = torch.randn_like(z_gt, device=self.device, requires_grad=True)
+        z_t = torch.randn_like(z_gt, device=self.device, requires_grad=True, dtype=torch.double)
+        with torch.no_grad():
+            z_t[:, :, 2] = z_t[:, :, 2] + 2
+        #z_t *= 2
         zs = []
 
         timesteps = range(0, self.noise_schedule.timesteps, self.noise_schedule.timesteps // num_steps)
@@ -516,14 +520,14 @@ class SimpleTransformerDiffuser(pl.LightningModule):
         flattened_rmats = compute_rotation_matrix_from_ortho6d(flattened_ortho6d)
         rmats = flattened_rmats.reshape(z_0.shape[0],z_0.shape[1], 3, 3)
         
-        # k = random.randint(0, 15)
-        # print(f"{k}th element in batch.")
-        # for i in range(z_0.shape[1]):
-        #     print(f"XYZ: {translations[k][i]} ROTATION MATRIX:\n{rmats[k][i]}")
+        k = random.randint(0, 15)
+        print(f"{k}th element in batch.")
+        for i in range(z_0.shape[1]):
+            print(f"XYZ: {translations[k][i]} ROTATION MATRIX:\n{rmats[k][i]}")
 
-        # print(f"Writing {translations.shape[0]} poses to {os.path.join(self.poses_dir, 'poses.pickle')}")
-        # with open(os.path.join(self.poses_dir, "poses.pickle"), 'wb') as file:
-        #     pickle.dump((translations, rmats), file)
+        print(f"Writing {translations.shape[0]} poses to {os.path.join(self.poses_dir, 'poses.pickle')}")
+        with open(os.path.join(self.poses_dir, "poses.pickle"), 'wb') as file:
+            pickle.dump((translations, rmats), file)
 
         if self.guidance_function:
             self.guidance_alignment = self.guidance_function(xyzs, rgbs, hat_z_0)

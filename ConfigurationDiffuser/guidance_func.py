@@ -33,7 +33,7 @@ class guidance_functions:
                 identity = identity.to(rmats.device)
 
                 # Construct the homogeneous matrix
-                tfs = torch.cat((torch.cat((rmats, xyzs), dim=-1), identity.repeat(16, 6, 1, 1)[:,:,3,:].unsqueeze(2)), dim=-2)
+                tfs = torch.cat((torch.cat((rmats, xyzs), dim=-1), identity.repeat(16, 4, 1, 1)[:,:,3,:].unsqueeze(2)), dim=-2)
 
 
                 my_image_features = self.embedder_model((points, tfs))

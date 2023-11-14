@@ -2,7 +2,7 @@ import torch
 import clip
 from PIL import Image
 from CLIPEmbedder.clip_embedder import CLIPEmbedder
-from Data.basic_writerdatasets_mem import CLIPEmbedderDataset
+from Data.basic_writerdatasets_st import CLIPEmbedderDataset
 
 """
 This is meant to evaluate trained embedders, as compared to the stock image embedder.
@@ -10,26 +10,26 @@ This is meant to evaluate trained embedders, as compared to the stock image embe
 device = "cuda" if torch.cuda.is_available() else "cpu"
 model, preprocess = clip.load("ViT-B/32", device=device)
 dataset = CLIPEmbedderDataset(preprocess, device, ["CLIPEmbedder/Tests/Data"])
-embedder_model = CLIPEmbedder.load_from_checkpoint("/home/nichols/Experiments/NLPGoals/embedder_experiments/lightning_logs/version_49970/checkpoints/epoch=352-step=434896.ckpt", clip_model=model)
+embedder_model = CLIPEmbedder.load_from_checkpoint("/home/nicholscrawfordtaylor/Experiments/NLPGoals/embedder_experiments/jul4/2023_09_05-11:57:34/lightning_logs/version_0/checkpoints/epoch=205-step=247406.ckpt", clip_model=model).to(device)
 use_logits = False
 
 def get_eval_strs(
             default = [
-                "a set of objects placed in a circle", 
-                "a set of objects placed in a straight line",
-                "a horizontal straight line of objects",
-                "a set of objects placed in a line",
-                "place the objects in a circle",
-                "place the objects in a straight line",
-                "place the objects in a line",
-                "a set of objects in a circle",
-                "a set of objects in a straight line", 
-                "a set of objects in a line",
-                "objects in a circle",
-                "objects in a straight line",
-                "objects in a line",
-                "objects on the top shelf", 
-                "objects on the ground",
+                "soup on the top right", 
+                "jello box on the middle shelf",
+                "middle shelf jello box",
+                "cleaner on the top shelf",
+                "blue pitcher on the top right",
+                "blue pitcher, top right",
+                "mustard on the top left",
+                "spam on the bottom right",
+                "cleaner on top", 
+                "coffee can in the middle shelf",
+                "scissors on the bottom shelf",
+                "bowl on the middle shelf",
+                "cheez its on the bottom shelf",
+                "cheezits on the bottom", 
+                "wood block on the bottom shelf",
                 "a man walking a dog"
                 ]
             ):
@@ -87,21 +87,24 @@ def eval(eval_strs, pth):
             print(f"{str:<40}\t{score.item():<10.6f}\t{my_score.item():<10.6f}")    
             
 def main():
-    circle_image = "rgb_0002.png"
-    line_image = "rgb_0008.png"
-    uniform_image = "rgb_0049.png"
-    
+    soup_on_top_image = "rgb_67.png"
+    cleaner_on_top_image = "rgb_102.png"
+    cheezits_on_bottom = "rgb_117.png"
+    pitcher_on_top_right = "rgb_127.png"
+
     eval_strs = get_eval_strs()
     
-    print(f"Testing circle image {circle_image}")
-    eval(eval_strs, circle_image)
+    print(f"Testing soup_on_top_image {soup_on_top_image}")
+    eval(eval_strs, soup_on_top_image)
         
-    print(f"Testing line image {line_image}")
-    eval(eval_strs, line_image)
+    print(f"Testing cleaner_on_top_image {cleaner_on_top_image}")
+    eval(eval_strs, cleaner_on_top_image)
     
-    print(f"Testing uniform image {uniform_image}")
-    eval(eval_strs, uniform_image)
+    print(f"Testing cheezits_on_bottom {cheezits_on_bottom}")
+    eval(eval_strs, cheezits_on_bottom)
    
-        
+    print(f"Testing pitcher_on_top_right {pitcher_on_top_right}")
+    eval(eval_strs, pitcher_on_top_right)
+
 if __name__ == "__main__":
     main()

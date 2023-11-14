@@ -166,12 +166,12 @@ class CLIPEmbedderDataset(AbstractDataset):
 
         device = "cuda"
         dtype = torch.float64
-        pc_rgbs = torch.tensor(pc_rgbs).to(device).to(dtype)
-        pc_xyzs = torch.tensor(pc_xyzs).to(device).to(dtype)
-        pc_norms = torch.tensor(pc_norms).to(device).to(dtype)
-        encoder_batch_idxs = torch.tensor(encoder_batch_idxs).to(device)
-        post_encoder_batch_idxs = torch.tensor(post_encoder_batch_idxs).to(device)
-        transforms_batch = transforms_batch.to(device).to(dtype)
+        pc_rgbs = torch.tensor(pc_rgbs, device=device, dtype=dtype)
+        pc_xyzs = torch.tensor(pc_xyzs, device=device, dtype=dtype)
+        pc_norms = torch.tensor(pc_norms, device=device, dtype=dtype)
+        encoder_batch_idxs = torch.tensor(encoder_batch_idxs, device=device)
+        post_encoder_batch_idxs = torch.tensor(post_encoder_batch_idxs, device=device)
+        transforms_batch = transforms_batch.to(device, dtype=dtype)
 
         return ((pc_rgbs, pc_xyzs, pc_norms, encoder_batch_idxs, post_encoder_batch_idxs, transforms_batch), images_batch)
     
@@ -222,12 +222,12 @@ class DiffusionDataset(AbstractDataset):
 
         device = "cuda"
         dtype = torch.float64
-        pc_rgbs = torch.tensor(pc_rgbs).to(device).to(dtype)
-        pc_xyzs = torch.tensor(pc_xyzs).to(device).to(dtype)
-        pc_norms = torch.tensor(pc_norms).to(device).to(dtype)
-        encoder_batch_idxs = torch.tensor(encoder_batch_idxs).to(device)
-        post_encoder_batch_idxs = torch.tensor(post_encoder_batch_idxs).to(device)
-        transforms_batch = transforms_batch.to(device).to(dtype)
+        pc_rgbs = torch.tensor(pc_rgbs, device=device, dtype=dtype)
+        pc_xyzs = torch.tensor(pc_xyzs, device=device, dtype=dtype)
+        pc_norms = torch.tensor(pc_norms, device=device, dtype=dtype)
+        encoder_batch_idxs = torch.tensor(encoder_batch_idxs, device=device)
+        post_encoder_batch_idxs = torch.tensor(post_encoder_batch_idxs, device=device)
+        transforms_batch = transforms_batch.to(device, dtype=dtype)
 
         return (pc_rgbs, pc_xyzs, pc_norms, encoder_batch_idxs, post_encoder_batch_idxs, transforms_batch)
 

@@ -1,8 +1,9 @@
 poses_dir: /home/nicholscrawfordtaylor/Experiments/NLPGoals/sampling/poses
 pointclouds_dir: /home/nicholscrawfordtaylor/Experiments/NLPGoals/sampling/pointclouds
 # uniform
-# model_dir: /home/nicholscrawfordtaylor/Experiments/NLPGoals/diffusion_experiments/2023_06_14-13:51:35/lightning_logs/version_0/checkpoints/epoch=267-step=82276.ckpt
-model_dir: /home/nicholscrawfordtaylor/Experiments/NLPGoals/diffusion_experiments/2023_06_19-14:03:52/lightning_logs/version_0/checkpoints/epoch=19-step=640.ckpt
+model_dir: /home/nicholscrawfordtaylor/Experiments/NLPGoals/diffusion_experiments_pl/2023_09_01-18:30:36/lightning_logs/version_0/checkpoints/epoch=221-step=426462.ckpt
+# circles (not shuffled, or trained well.)
+# model_dir: /home/nicholscrawfordtaylor/Experiments/NLPGoals/diffusion_experiments/2023_06_19-14:03:52/lightning_logs/version_0/checkpoints/epoch=19-step=640.ckpt
 
 random_seed: 1
 device: 0
@@ -14,21 +15,22 @@ dataset:
 
 sampling:
   ddim: True
-  ddim_steps: 3
+  ddim_steps: 20 
   guidance_sampling: True
   forward_universal_guidance: True
-  guidance_strength_factor: 10
+  guidance_strength_factor: 1
   backward_universal_guidance: True
   backwards_steps_m: 20
-  backward_guidance_lr: 0.05
+  backward_guidance_lr: 0.01 #0.1000 #1
   per_step_self_recurrance: True
-  per_step_k: 4
+  per_step_k: 1
 
   clip_model: ViT-B/32
-  embedder_checkpoint_path: /home/nicholscrawfordtaylor/Experiments/NLPGoals/embedder_experiments/sorta_works/lightning_logs/version_49970/checkpoints/epoch=352-step=434896.ckpt
+  embedder_checkpoint_path: /home/nicholscrawfordtaylor/Experiments/NLPGoals/embedder_experiments/jul4/2023_09_05-11:57:34/lightning_logs/version_0/checkpoints/epoch=205-step=247406.ckpt
   labels:
-    - a set of objects placed in a line
-
-
+    - cheezits on the top
+    - top shelf cheezits
+    - cheez-its, top shelf
+    - cheez-its on the top shelf
 
 

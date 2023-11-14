@@ -42,9 +42,10 @@ class SimpleTransformerDiffuser(pl.LightningModule):
     This model takes in point clouds of all objects
     """
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, profiler=None):
 
         super().__init__()
+        #self.profiler = PassThroughProfiler(dirpath="/home/nicholscrawfordtaylor/code/NaturalLanguagePlanningGoals", filename="perf_logs_psthr")
         self.cfg = cfg
         self.save_hyperparameters()
 
@@ -126,6 +127,7 @@ class SimpleTransformerDiffuser(pl.LightningModule):
         return concatenated_embeddings, src_key_padding_mask
     
     def _forward(self,t, pc_rgbs, pc_xyzs, pc_norms, encoder_batch_idxs, post_encoder_batch_idxs, transforms_t):
+        #with self.profiler.profile("forward"):
         """
             The forward pass of the model
 
@@ -585,14 +587,14 @@ class SimpleTransformerDiffuser(pl.LightningModule):
         return hat_z_0, hat_z_t_minus_one
 
     def train_dataloader(self):
-        train_dataset = DiffusionDataset(self.device, ds_roots=self.cfg.dataset.train_dirs) 
+        train_dataset = DiffusionDataset(self.device, ds_roots=self.cfg.dataset.train_dirs, max_size=None) 
         
         return DataLoader(train_dataset, batch_size=self.cfg.dataset.batch_size, shuffle=True,
                                         pin_memory=self.cfg.dataset.pin_memory, num_workers=self.cfg.dataset.num_workers,
                                         collate_fn=train_dataset.collate_fn)
         
     def val_dataloader(self):
-        valid_dataset = DiffusionDataset(self.device, ds_roots=self.cfg.dataset.valid_dirs)
+        valid_dataset = DiffusionDataset(self.device, ds_roots=self.cfg.dataset.valid_dirs, max_size=None)
         return DataLoader(valid_dataset, batch_size=self.cfg.dataset.batch_size, shuffle=False,
                                         pin_memory=self.cfg.dataset.pin_memory, num_workers=self.cfg.dataset.num_workers,
                                         collate_fn=valid_dataset.collate_fn)

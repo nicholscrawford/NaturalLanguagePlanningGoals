@@ -164,3 +164,6 @@ lightning_logs/
 
 # Vscode
 .vscode/
+*.pt.trace.json
+fit-perf_logs*
+profiler.txt

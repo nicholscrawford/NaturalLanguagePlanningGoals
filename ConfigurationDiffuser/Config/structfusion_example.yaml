@@ -1,4 +1,4 @@
-experiment_dir: /home/nicholscrawfordtaylor/Experiments/NLPGoals/diffusion_experiments/${oc.env:DATETIME}
+experiment_dir: /home/nicholscrawfordtaylor/Experiments/NLPGoals/diffusion_experiments/jul4/${oc.env:DATETIME}
 
 random_seed: 1
 device: 0
@@ -8,14 +8,14 @@ save_best_model: True
 
 dataset:
   train_dirs:
-    - /home/nicholscrawfordtaylor/data/jun5_structs/
+    - /home/nicholscrawfordtaylor/data/NaturalLanguagePlanningGoals/jul4
   valid_dirs:
-    - /home/nicholscrawfordtaylor/data/jun6_structs/
+    - /home/nicholscrawfordtaylor/data/NaturalLanguagePlanningGoals/jul4_val
   batch_size: 16
  
-  num_pts: 1024
+  # num_pts: 1024
 
-  num_workers: 0
+  num_workers: 1
   pin_memory: True
   shuffle_object_index: False
 
@@ -32,7 +32,7 @@ model:
 
 training:
   learning_rate: 0.0001
-  max_epochs: 200
+  max_epochs: 100
   l2: 0  #0.0001
   # lr_restart: 3000
   # warmup: 10

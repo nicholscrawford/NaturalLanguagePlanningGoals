@@ -44,10 +44,13 @@ class AbstractDataset(Dataset):
                     pointcloud_xyz_path = os.path.join(cwd, f"pointcloud_{sim_idx_str}.npy")
                     pointcloud_rgb_path = os.path.join(cwd, f"pointcloud_rgb_{sim_idx_str}.npy")
                     pointcloud_seg_path = os.path.join(cwd, f"pointcloud_semantic_{sim_idx_str}.npy")
+                    pointcloud_normals_path = os.path.join(cwd, f"pointcloud_normals_{sim_idx_str}.npy")
                     image_path = os.path.join(cwd, f"rgb_{sim_idx_str}.png")
                     
                     # Save image path 
                     self.images.append(image_path)
+
+                    
                     
                     # Save poses
                     #poses = rearrange(poses, "height width object_idx -> object_idx height width")
